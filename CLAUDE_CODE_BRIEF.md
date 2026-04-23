@@ -869,11 +869,11 @@ Work through milestones in order. Each milestone should be fully working before 
 - [ ] Unit test: verify prices landing in TimescaleDB with correct schema
 
 #### Elevator Scraper
-- [ ] Port operator's existing scraper into `farm_platform/feeds/elevator_scraper.py`
-- [ ] Standardize output: elevator, commodity, cash_price, futures_ref, basis, contract_month
-- [ ] Write to `cash_prices` hypertable
-- [ ] Write raw result to MongoDB `elevator_snapshots`
-- [ ] Unit test: verify basis calculation (cash minus futures) is correct
+- [x] Port operator's existing scraper into `farm_platform/feeds/elevator_scraper.py`
+- [x] Standardize output: elevator, commodity, cash_price, futures_ref, basis, contract_month
+- [x] Write to `cash_prices` hypertable
+- [x] Write raw result to MongoDB `elevator_snapshots`
+- [x] Unit test: verify basis calculation (cash minus futures) is correct
 
 #### Hedge Tracker Backend
 - [x] Define MongoDB `positions` collection schema (see Section 6.3)

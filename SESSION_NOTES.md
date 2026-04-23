@@ -1,5 +1,55 @@
 # Session Notes
 
+## Session: 2026-04-23
+
+### What was done
+- Built `farm_platform/feeds/elevator_scraper.py` -- ported from the operator's
+  existing grainsignals repo (https://github.com/dbusch78/grainsignals).
+
+**Key design decisions:**
+- Auth uses Selenium headless Chrome (same approach as grainsignals) but runs in
+  `asyncio.to_thread()` to avoid blocking the async event loop.
+- Cookie persistence: pickled to `.cache/elevator_cookies.pkl`, reused between
+  scrapes, refreshed automatically on 401/403.
+- HTTP fetch uses `httpx.AsyncClient` (already in deps) with the Selenium cookies.
+- Parsing is pure functions -- `_parse(json_data, elevator_names)` with no I/O,
+  fully unit-tested (15 tests, all passing).
+- Selenium and webdriver-manager added as optional dep group `[elevator]`.
+- New config section `ElevatorSettings` (env prefix `ELEVATOR_`) added to
+  `farm_platform/config.py`.
+- APScheduler job `elevator_scraper` wired into `backend/main.py` on `ELEVATOR_SCRAPER_INTERVAL_HRS`.
+- `.env.example` updated with all new ELEVATOR_* keys.
+
+**What goes in .env to activate:**
+```
+ELEVATOR_RVC_EMAIL=your@email.com
+ELEVATOR_RVC_PASSWORD=yourpassword
+ELEVATOR_CASH_BIDS_URL=https://shop.rivervalleycoop.com/api/cash-bids  # (exact URL from browser devtools)
+ELEVATOR_NAMES=Toulon  # (exact name as it appears in the API response)
+```
+
+**Note:** The actual `ELEVATOR_CASH_BIDS_URL` needs to be confirmed from the
+browser DevTools Network tab when logged into the RVC site. The old grainsignals
+repo stored it in `CASH_BIDS_URL` env var.
+
+### What comes next (Milestone 1 remaining)
+- [ ] Milestone 1 acceptance tests (requires running Docker stack):
+      TimescaleDB receiving futures prices, WebSocket broadcasting, scenario model
+      returning correct values via API
+- [ ] `scripts/seed_positions.py` -- enter existing positions
+- Optionally: confirm CASH_BIDS_URL by inspecting browser network tab logged
+  into RVC site
+
+### What comes after (Milestone 2 -- Frontend)
+- Next.js 15 init, Tailwind dark theme, TypeScript API client
+- HedgeCard, WeatherCard (placeholder), AgentCard (placeholder), DayTradingCard,
+  CongressionalCard
+- TradingView Lightweight Charts for price + basis chart
+- Scenario modeler UI
+- Grafana dashboards (futures OHLC, basis history, net effective price)
+
+---
+
 ## Session: 2026-04-22
 
 ### What was done

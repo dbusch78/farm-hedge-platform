@@ -15,6 +15,7 @@ from backend.routers import hedge as hedge_router
 from backend.websocket import on_new_price
 from backend.websocket import router as ws_router
 from farm_platform.config import settings
+from farm_platform.feeds.elevator_scraper import run_once as elevator_run_once
 from farm_platform.feeds.futures_feed import register_price_callback, run_once
 from farm_platform.storage.mongo import ensure_collections
 from farm_platform.storage.timescale import close_pool, get_pool
@@ -58,8 +59,18 @@ async def startup() -> None:
 
     interval = settings.schedule.futures_feed_interval_min
     _scheduler.add_job(run_once, "interval", minutes=interval, id="futures_feed")
+
+    elevator_interval = settings.elevator.scraper_interval_hrs
+    _scheduler.add_job(
+        elevator_run_once, "interval", hours=elevator_interval, id="elevator_scraper"
+    )
+
     _scheduler.start()
-    log.info("scheduler_started", futures_interval_min=interval)
+    log.info(
+        "scheduler_started",
+        futures_interval_min=interval,
+        elevator_interval_hrs=elevator_interval,
+    )
 
 
 @app.on_event("shutdown")

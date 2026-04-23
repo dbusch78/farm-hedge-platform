@@ -40,6 +40,11 @@ trading = [
 weather = [
     "websockets>=12.0",       # Ambient Weather real-time feed
 ]
+elevator = [
+    "selenium>=4.20",         # Headless auth for RVC cookie session
+    "webdriver-manager>=4.0", # Auto-download ChromeDriver
+    "python-dateutil>=2.9",   # ISO datetime parsing from API response
+]
 dev = [
     "pytest>=8.2",
     "pytest-asyncio>=0.23",
@@ -48,7 +53,7 @@ dev = [
     "httpx>=0.27",            # TestClient dependency
 ]
 all = [
-    "farm-platform[trading,weather,dev]",
+    "farm-platform[trading,weather,elevator,dev]",
 ]
 
 [tool.setuptools.packages.find]

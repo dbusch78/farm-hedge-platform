@@ -65,6 +65,22 @@ class FarmSettings(BaseSettings):
     expected_bushels_beans: int = 18_000
 
 
+class ElevatorSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="ELEVATOR_", extra="ignore")
+
+    rvc_email: str = ""
+    rvc_password: str = ""
+    rvc_base: str = "https://shop.rivervalleycoop.com"
+    cash_bids_url: str = ""
+    names: str = ""  # comma-separated elevator names, e.g. "Toulon,Kewanee"
+    cookie_path: str = ".cache/elevator_cookies.pkl"
+    scraper_interval_hrs: int = 1
+
+    @property
+    def elevator_list(self) -> list[str]:
+        return [n.strip() for n in self.names.split(",") if n.strip()]
+
+
 class ScheduleSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -88,6 +104,7 @@ class Settings(BaseSettings):
     alpaca: AlpacaSettings = Field(default_factory=AlpacaSettings)
     news: NewsSettings = Field(default_factory=NewsSettings)
     farm: FarmSettings = Field(default_factory=FarmSettings)
+    elevator: ElevatorSettings = Field(default_factory=ElevatorSettings)
     schedule: ScheduleSettings = Field(default_factory=ScheduleSettings)
 
 
