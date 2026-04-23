@@ -909,30 +909,30 @@ Work through milestones in order. Each milestone should be fully working before 
 **Goal:** Next.js dashboard is live at `farm.local`, showing real data, with hedge card and scenario modeler fully functional on mobile and desktop.
 
 #### Next.js Project Setup
-- [ ] Initialize Next.js 15 project with TypeScript and Tailwind CSS
-- [ ] Configure dark theme in `tailwind.config.ts` (color tokens, font)
-- [ ] Implement `app/layout.tsx` -- dark shell, top navigation, live mode banner placeholder
-- [ ] Implement typed API client in `lib/api.ts` pointing to `api.farm.local`
-- [ ] Define TypeScript types in `lib/types.ts` matching FastAPI Pydantic models
-- [ ] Implement `hooks/useFuturesPrices.ts` WebSocket hook with auto-reconnect and stale indicator
+- [x] Initialize Next.js 15 project with TypeScript and Tailwind CSS (Next.js 16 / Tailwind v4 -- no tailwind.config.ts, CSS @theme inline)
+- [x] Configure dark theme in `tailwind.config.ts` (color tokens, font) -- done via globals.css @theme inline
+- [x] Implement `app/layout.tsx` -- dark shell, top navigation, live mode banner placeholder
+- [x] Implement typed API client in `lib/api.ts` pointing to `api.farm.local`
+- [x] Define TypeScript types in `lib/types.ts` matching FastAPI Pydantic models
+- [x] Implement `hooks/useFuturesPrices.ts` WebSocket hook with auto-reconnect and stale indicator
 
 #### Main Dashboard
-- [ ] Implement `app/page.tsx` -- responsive card grid
-- [ ] Implement `HedgeCard.tsx` -- Phase 1 (yellow-green border) and Phase 2 (blue border) variants
-- [ ] Hedge card shows: commodity, contract, bushels, contracts, net effective price, P&L, premium cost
-- [ ] Prices on hedge card update in real time via WebSocket
-- [ ] Implement `WeatherCard.tsx` -- placeholder (real data in Milestone 3)
-- [ ] Implement `AgentCard.tsx` -- placeholder (real data in Milestone 4)
-- [ ] Implement `DayTradingCard.tsx` -- placeholder with Paper badge, "Go Live" button disabled
-- [ ] Implement `CongressionalCard.tsx` -- placeholder
+- [x] Implement `app/page.tsx` -- responsive card grid
+- [x] Implement `HedgeCard.tsx` -- Phase 1 (yellow-green border) and Phase 2 (blue border) variants
+- [x] Hedge card shows: commodity, contract, bushels, contracts, net effective price, P&L, premium cost
+- [x] Prices on hedge card update in real time via WebSocket
+- [x] Implement `WeatherCard.tsx` -- placeholder (real data in Milestone 3)
+- [x] Implement `AgentCard.tsx` -- placeholder (real data in Milestone 4)
+- [x] Implement `DayTradingCard.tsx` -- placeholder with Paper badge, "Go Live" button disabled
+- [x] Implement `CongressionalCard.tsx` -- placeholder
 
 #### Hedge Detail Page
-- [ ] Implement `app/hedge/page.tsx` -- position list with expand/collapse
-- [ ] Implement `PriceChart.tsx` using TradingView Lightweight Charts
-- [ ] Chart shows ZC or ZS candlestick + basis overlay + strike price line + net effective price line
-- [ ] Implement scenario modeler UI -- slider input for price range, output table and line chart
-- [ ] Implement position entry form (`PositionEntry.tsx`) -- all fields, delta-adjusted count calculated live as operator types
-- [ ] Mobile layout verified: all elements usable on a phone screen
+- [x] Implement `app/hedge/page.tsx` -- position list with expand/collapse
+- [x] Implement `PriceChart.tsx` using TradingView Lightweight Charts
+- [x] Chart shows ZC or ZS candlestick + basis overlay + strike price line + net effective price line
+- [x] Implement scenario modeler UI -- slider input for price range, output table and line chart
+- [x] Implement position entry form (`PositionEntry.tsx`) -- all fields, delta-adjusted count calculated live as operator types
+- [ ] Mobile layout verified: all elements usable on a phone screen (verify after Docker up)
 
 #### Grafana -- Initial Dashboards
 - [ ] Connect Grafana to TimescaleDB via Postgres data source

@@ -84,6 +84,19 @@ async def get_latest_futures(symbol: str) -> asyncpg.Record | None:
     )
 
 
+async def get_futures_history(symbol: str, days: int = 90) -> list[asyncpg.Record]:
+    return await fetch(
+        """
+        SELECT time, open, high, low, close, volume, stale
+        FROM futures_prices
+        WHERE symbol = $1
+          AND time >= NOW() - ($2 || ' days')::INTERVAL
+        ORDER BY time ASC
+        """,
+        symbol, str(days),
+    )
+
+
 # ── Cash prices ─────────────────────────────────────────────────────────────
 
 async def insert_cash_price(

@@ -26,7 +26,7 @@ from farm_platform.hedge.tracker import (
     get_position_by_id,
     patch_position,
 )
-from farm_platform.storage.timescale import get_latest_cash, get_latest_futures
+from farm_platform.storage.timescale import get_futures_history, get_latest_cash, get_latest_futures
 
 log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/api/hedge", tags=["hedge"])
@@ -170,6 +170,23 @@ async def get_futures_prices() -> list[dict[str, Any]]:
                 "stale": bool(row["stale"]),
             })
     return results
+
+
+@router.get("/prices/history/{symbol}", response_model=list[dict[str, Any]])
+async def get_price_history(symbol: str, days: int = 90) -> list[dict[str, Any]]:
+    rows = await get_futures_history(symbol, days)
+    return [
+        {
+            "time": r["time"].isoformat() if hasattr(r["time"], "isoformat") else str(r["time"]),
+            "open": float(r["open"]) if r["open"] is not None else None,
+            "high": float(r["high"]) if r["high"] is not None else None,
+            "low": float(r["low"]) if r["low"] is not None else None,
+            "close": float(r["close"]) if r["close"] is not None else None,
+            "volume": int(r["volume"]) if r["volume"] is not None else None,
+            "stale": bool(r["stale"]),
+        }
+        for r in rows
+    ]
 
 
 @router.get("/prices/cash", response_model=list[CashPriceResponse])

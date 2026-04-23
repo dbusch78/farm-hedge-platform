@@ -1,5 +1,85 @@
 # Session Notes
 
+## Session: 2026-04-23 (continued)
+
+### What was done
+- Wrote `scripts/seed_positions.py` -- interactive CLI script to insert existing
+  positions into MongoDB. Takes `--dry-run` and `--clear` flags. Has example
+  position templates commented out for the operator to fill in.
+- Bootstrapped Next.js 16 / Tailwind v4 frontend in `frontend/`. Key notes:
+  - Node.js 24.15 / Next.js 16.2.4 / Tailwind v4 (CSS-based config, no tailwind.config.ts)
+  - Tailwind v4 uses `@theme inline` in `globals.css` -- not `tailwind.config.ts`
+  - Params in dynamic routes are now `Promise<{...}>` -- must `await params`
+  - TypeScript strict, `@/*` path alias
+
+**Files created:**
+- `frontend/app/globals.css` -- full dark theme via CSS variables + `@theme inline`
+- `frontend/lib/types.ts` -- all TypeScript types matching FastAPI Pydantic models
+- `frontend/lib/api.ts` -- typed fetch wrapper for all API endpoints
+- `frontend/hooks/useFuturesPrices.ts` -- WebSocket hook with auto-reconnect,
+  stale detection (60s), and exponential backoff
+- `frontend/components/cards/HedgeCard.tsx` -- full Phase 1/2 card with live
+  WebSocket price updates, P&L, premium cost line, delta-adj contract counts
+- `frontend/components/cards/WheatCard.tsx` -- ZW leading indicator card
+- `frontend/components/cards/AgentCard.tsx` -- positioning advisor output card
+- `frontend/components/cards/WeatherCard.tsx` -- placeholder (Milestone 3)
+- `frontend/components/cards/DayTradingCard.tsx` -- paper/live badge, disabled
+  Go Live button (Milestone 5)
+- `frontend/components/cards/CongressionalCard.tsx` -- placeholder (Milestone 6)
+- `frontend/app/layout.tsx` -- dark shell, sticky top nav, footer
+- `frontend/app/page.tsx` -- server component dashboard: fetches positions,
+  futures prices, net prices, trading mode, latest agent run in parallel;
+  falls back gracefully when backend is offline
+- `frontend/.env.local` -- dev env pointing to localhost:8000
+
+**Dependencies installed:** `lightweight-charts@5.1.0`, `lucide-react@1.8.0`, `zustand@5.0.12`
+
+**TypeScript check:** passing (exit 0)
+
+### Session 2 continued (same day) -- Milestone 2 frontend complete
+
+**Backend fixes:**
+- `farm_platform/storage/timescale.py`: added `get_futures_history(symbol, days)` query
+- `backend/routers/hedge.py`: added `GET /api/hedge/prices/history/{symbol}?days=N` endpoint
+- `lib/api.ts`: fixed prices routes (were missing `/hedge/` prefix), fixed `getNetPrice`
+  to return `null` not throw (backend returns a list, not filtered by commodity)
+
+**Frontend -- new files:**
+- `frontend/components/charts/PriceChart.tsx` -- TradingView Lightweight Charts v5
+  candlestick + basis line overlay + strike + net-eff price horizontal lines.
+  NOTE: v5 exports are PascalCase: `CandlestickSeries`, `LineSeries` (not camelCase).
+  The typings.d.ts shows camelCase but runtime exports are PascalCase -- Turbopack
+  correctly rejected the camelCase imports.
+- `frontend/components/trading/ScenarioModeler.tsx` -- full scenario table with
+  min/max/steps inputs, highlights current futures price row and at-strike row
+- `frontend/components/trading/PositionEntry.tsx` -- all fields, live delta-adj
+  contract count display, Phase 2 cash_sale_price field appears when type = call
+- `frontend/app/hedge/page.tsx` -- server component: fetches positions, prices,
+  net prices, OHLC history in parallel; renders CommoditySection for ZC and ZS
+  each with chart + position list + scenario modeler; Add Position form at bottom
+
+**Build:** clean (`npm run build` exit 0, both `/` and `/hedge` routes compile)
+
+### What comes next (Milestone 2 remaining -- needs Docker stack)
+- [ ] Mobile layout verified on phone over VPN
+- [ ] `farm.local` loads and hedge card shows live prices
+- [ ] WebSocket price updates verified without page refresh
+- [ ] Scenario modeler tested with real data
+- [ ] TradingView chart renders with real OHLC data
+
+### After Milestone 2 acceptance (Milestone 2 Grafana -- needs Docker)
+- [ ] Connect Grafana to TimescaleDB, build 3 dashboards (futures OHLC, basis history,
+  net effective price), export JSONs to `grafana/provisioning/dashboards/`
+
+### What comes next after that (Milestone 3 -- Weather)
+- `platform/feeds/ambient_feed.py` -- Ambient Weather WebSocket + REST
+- `platform/feeds/openmeteo_feed.py` -- 4 regions (corn belt, MT/PR/pampas)
+- `platform/feeds/gdu_calculator.py` -- GDU from planting date
+- `platform/feeds/weather_service.py` -- internal service for agents
+- FastAPI weather routes + WeatherCard real data + Grafana weather dashboards
+
+---
+
 ## Session: 2026-04-23
 
 ### What was done
