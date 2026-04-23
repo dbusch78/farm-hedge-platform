@@ -816,13 +816,13 @@ Work through milestones in order. Each milestone should be fully working before 
 - [ ] Verify Docker daemon starts on boot (`systemctl enable docker`)
 
 #### Repository
-- [ ] Initialize git repo, add `.gitignore` (include `.env`, `data/`, `node_modules/`, `__pycache__/`)
-- [ ] Create `pyproject.toml` with all Python dependencies
-- [ ] Create `.env.example` with all required keys and comments
+- [x] Initialize git repo, add `.gitignore` (include `.env`, `data/`, `node_modules/`, `__pycache__/`)
+- [x] Create `pyproject.toml` with all Python dependencies
+- [x] Create `.env.example` with all required keys and comments
 - [ ] Create `.env` with real values (never commit this)
 
 #### Docker Compose -- Base Services
-- [ ] Write `docker-compose.yml` with all services (see Section 10 template below)
+- [x] Write `docker-compose.yml` with all services (see Section 10 template below)
 - [ ] TimescaleDB container starts and is reachable on internal Docker network
 - [ ] MongoDB container starts and is reachable on internal Docker network
 - [ ] Grafana container starts
@@ -843,7 +843,7 @@ Work through milestones in order. Each milestone should be fully working before 
 - [ ] Verify `farm.local` resolves from a phone on VPN (outside LAN)
 
 #### Database Init
-- [ ] Run `scripts/init_db.py` -- creates all hypertables and indexes
+- [x] Run `scripts/init_db.py` -- creates all hypertables and indexes (script written; run after Docker up)
 - [ ] Verify TimescaleDB schema is correct (`\dt` in psql)
 - [ ] Verify MongoDB collections exist
 - [ ] Run `scripts/backfill_basis.py` -- loads USDA AMS historical basis data
@@ -861,39 +861,39 @@ Work through milestones in order. Each milestone should be fully working before 
 **Goal:** Real-time futures prices, local cash/basis, and fully functional hedge tracker with net effective price calculation. No UI yet -- FastAPI endpoints only.
 
 #### Futures Feed
-- [ ] Implement `platform/feeds/futures_feed.py` (yfinance ZC=F, ZS=F, ZW=F)
-- [ ] Pull on configurable interval (default 15 min during market hours)
-- [ ] Write to `futures_prices` hypertable
-- [ ] Set `stale=True` flag if pull fails -- use last known price, do not crash
-- [ ] APScheduler job wired up and running
+- [x] Implement `farm_platform/feeds/futures_feed.py` (yfinance ZC=F, ZS=F, ZW=F)
+- [x] Pull on configurable interval (default 15 min during market hours)
+- [x] Write to `futures_prices` hypertable
+- [x] Set `stale=True` flag if pull fails -- use last known price, do not crash
+- [x] APScheduler job wired up and running
 - [ ] Unit test: verify prices landing in TimescaleDB with correct schema
 
 #### Elevator Scraper
-- [ ] Port operator's existing scraper into `platform/feeds/elevator_scraper.py`
+- [ ] Port operator's existing scraper into `farm_platform/feeds/elevator_scraper.py`
 - [ ] Standardize output: elevator, commodity, cash_price, futures_ref, basis, contract_month
 - [ ] Write to `cash_prices` hypertable
 - [ ] Write raw result to MongoDB `elevator_snapshots`
 - [ ] Unit test: verify basis calculation (cash minus futures) is correct
 
 #### Hedge Tracker Backend
-- [ ] Define MongoDB `positions` collection schema (see Section 6.3)
-- [ ] Implement `platform/hedge/tracker.py` -- CRUD for positions
-- [ ] Implement `platform/hedge/calculator.py` -- net effective price (Phase 1 and 2)
-- [ ] Implement delta-adjusted contract count calculator
-- [ ] Premium always visible as a deduction -- never hidden from net price
-- [ ] Implement `platform/hedge/scenario_model.py` -- returns table of prices vs. net effective price
-- [ ] Unit test all calculator functions with known inputs and verified expected outputs
+- [x] Define MongoDB `positions` collection schema (see Section 6.3)
+- [x] Implement `farm_platform/hedge/tracker.py` -- CRUD for positions
+- [x] Implement `farm_platform/hedge/calculator.py` -- net effective price (Phase 1 and 2)
+- [x] Implement delta-adjusted contract count calculator
+- [x] Premium always visible as a deduction -- never hidden from net price
+- [x] Implement `farm_platform/hedge/scenario_model.py` -- returns table of prices vs. net effective price
+- [x] Unit test all calculator functions with known inputs and verified expected outputs
 
 #### FastAPI -- Hedge Routes
-- [ ] `GET /api/hedge/positions` -- list all positions
-- [ ] `POST /api/hedge/positions` -- create new position
-- [ ] `GET /api/hedge/positions/{id}` -- position detail + current P&L
-- [ ] `PUT /api/hedge/positions/{id}` -- update position (e.g., add cash sale price at Phase 2)
-- [ ] `GET /api/hedge/net-price` -- current net effective price across all positions
-- [ ] `POST /api/hedge/scenario` -- run scenario model for a list of hypothetical prices
-- [ ] `GET /api/prices/futures` -- latest ZC/ZS/ZW prices
-- [ ] `GET /api/prices/cash` -- latest elevator cash price and basis
-- [ ] WebSocket `/ws/prices` -- broadcast new prices to connected clients
+- [x] `GET /api/hedge/positions` -- list all positions
+- [x] `POST /api/hedge/positions` -- create new position
+- [x] `GET /api/hedge/positions/{id}` -- position detail + current P&L
+- [x] `PUT /api/hedge/positions/{id}` -- update position (e.g., add cash sale price at Phase 2)
+- [x] `GET /api/hedge/net-price` -- current net effective price across all positions
+- [x] `POST /api/hedge/scenario` -- run scenario model for a list of hypothetical prices
+- [x] `GET /api/prices/futures` -- latest ZC/ZS/ZW prices
+- [x] `GET /api/prices/cash` -- latest elevator cash price and basis
+- [x] WebSocket `/ws/prices` -- broadcast new prices to connected clients
 
 #### Milestone 1 Acceptance Criteria
 - [ ] Futures prices updating on schedule and visible in TimescaleDB
