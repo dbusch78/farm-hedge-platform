@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "farm-platform"
+version = "0.1.0"
+description = "Personal farm hedging, day-trading sandbox, and congressional portfolio tracker"
+requires-python = ">=3.12"
+dependencies = [
+    # API framework
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.30",
+    # Databases
+    "asyncpg>=0.29",          # TimescaleDB / PostgreSQL async driver
+    "motor>=3.5",             # MongoDB async driver
+    # Scheduling
+    "apscheduler>=3.10",
+    # AI agents
+    "anthropic>=0.28",
+    # Market data
+    "yfinance>=0.2.40",
+    # HTTP client
+    "httpx>=0.27",
+    # Data processing
+    "polars>=0.20",
+    # Config
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    # Logging
+    "structlog>=24.1",
+    # WebSocket support
+    "websockets>=12.0",
+]
+
+[project.optional-dependencies]
+trading = [
+    "alpaca-py>=0.26",        # Paper + live equity trading
+]
+weather = [
+    "websockets>=12.0",       # Ambient Weather real-time feed
+]
+dev = [
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.4",
+    "mypy>=1.10",
+    "httpx>=0.27",            # TestClient dependency
+]
+all = [
+    "farm-platform[trading,weather,dev]",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["farm_platform*", "backend*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
