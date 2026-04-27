@@ -1,5 +1,43 @@
 # Session Notes
 
+## Session: 2026-04-27
+
+### What was done
+- Rewrote `README.md` -- full install/run/test instructions for both environments
+  (WSL/Windows dev and Ubuntu VM production). Covers prerequisites, first-time setup,
+  NPM proxy config, DNS setup per environment, local dev without Docker, running tests,
+  Milestone 2 acceptance checklist, and daily ops commands.
+- Fixed `backend/Dockerfile` -- was copying `platform/` (does not exist); corrected to
+  `farm_platform/`.
+- Created `frontend/Dockerfile` -- was missing; multi-stage Node 24 Alpine build using
+  Next.js standalone output mode.
+- Added `output: "standalone"` to `frontend/next.config.ts` (required by the Dockerfile).
+
+**RVC elevator scraper -- FUTURES_URL support:**
+- Operator confirmed RVC also exposes a futures quotes endpoint:
+  `https://shop.rivervalleycoop.com/api/v1/commodity/futures`
+- NOTE: The cash bids API (`ELEVATOR_CASH_BIDS_URL`) already returns `basis` and
+  `futures_price` fields on each bid row -- basis is read directly from the API,
+  NOT calculated from yfinance math. The futures URL is an additional/redundant source.
+- Added `ELEVATOR_FUTURES_URL` to `ElevatorSettings` in `farm_platform/config.py`.
+- Added `ELEVATOR_FUTURES_URL` to `.env.example` (pre-filled with the known URL).
+- Refactored `elevator_scraper.py`:
+  - `_fetch_url(url, cookies)` -- generic authenticated GET replacing the old
+    cash-bids-only `_fetch()`
+  - `_fetch(cookies)` -- fires both URLs in parallel via `asyncio.gather`; returns
+    `(cash_data, futures_data)` tuple; futures fetch skipped gracefully if URL not set
+  - `run_once()` -- folds `futures_response` into the MongoDB snapshot alongside
+    `raw_response` when futures data is available
+
+### What comes next (Milestone 2 remaining -- needs Docker stack)
+- [ ] Mobile layout verified on phone over VPN
+- [ ] `farm.local` loads and hedge card shows live prices
+- [ ] WebSocket price updates verified without page refresh
+- [ ] Scenario modeler tested with real data
+- [ ] TradingView chart renders with real OHLC data
+
+---
+
 ## Session: 2026-04-23 (continued)
 
 ### What was done

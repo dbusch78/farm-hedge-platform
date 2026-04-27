@@ -183,13 +183,11 @@ def _selenium_authenticate() -> list[dict[str, Any]] | None:
 
 # ── HTTP fetch ────────────────────────────────────────────────────────────────
 
-async def _fetch(cookies: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """Fetch cash bids JSON using cookie auth. Returns None if auth expired."""
-    url = settings.elevator.cash_bids_url
-    if not url:
-        log.error("elevator_no_cash_bids_url")
-        return None
-
+async def _fetch_url(
+    url: str,
+    cookies: list[dict[str, Any]],
+) -> dict[str, Any] | list[Any] | None:
+    """Fetch a single authenticated URL. Returns None if auth expired."""
     cookie_dict = {
         c["name"]: c["value"]
         for c in cookies
@@ -207,34 +205,67 @@ async def _fetch(cookies: list[dict[str, Any]]) -> dict[str, Any] | None:
             resp = await client.get(url, cookies=cookie_dict, headers=headers)
 
         if resp.status_code in (401, 403):
-            log.warning("elevator_cookies_expired", status=resp.status_code)
+            log.warning("elevator_cookies_expired", status=resp.status_code, url=url)
             return None  # Caller will re-auth
 
         resp.raise_for_status()
-        data: dict[str, Any] | list[Any] = resp.json()
-        # Normalise: API may return a bare list
-        if isinstance(data, list):
-            return {"locations": data}
-        return data  # type: ignore[return-value]
+        return resp.json()  # type: ignore[return-value]
 
     except Exception as exc:
-        log.error("elevator_fetch_error", error=str(exc))
+        log.error("elevator_fetch_error", url=url, error=str(exc))
         return None
 
 
-async def _authenticated_fetch() -> dict[str, Any] | None:
-    """Fetch cash bids, refreshing cookies via Selenium if needed."""
+async def _fetch(
+    cookies: list[dict[str, Any]],
+) -> tuple[dict[str, Any] | None, list[Any] | None]:
+    """
+    Fetch cash bids and (optionally) futures quotes in parallel.
+
+    Returns (cash_bids_data, futures_data).  Either may be None on failure.
+    cash_bids_data is normalised to {"locations": [...]} if the API returns a bare list.
+    """
+    cash_bids_url = settings.elevator.cash_bids_url
+    futures_url = settings.elevator.futures_url
+
+    if not cash_bids_url:
+        log.error("elevator_no_cash_bids_url")
+        return None, None
+
+    tasks: list[Any] = [_fetch_url(cash_bids_url, cookies)]
+    if futures_url:
+        tasks.append(_fetch_url(futures_url, cookies))
+
+    results = await asyncio.gather(*tasks, return_exceptions=False)
+    raw_bids = results[0]
+    raw_futures = results[1] if futures_url and len(results) > 1 else None
+
+    # Normalise cash bids: API may return a bare list
+    if isinstance(raw_bids, list):
+        cash_data: dict[str, Any] | None = {"locations": raw_bids}
+    elif isinstance(raw_bids, dict):
+        cash_data = raw_bids
+    else:
+        cash_data = None  # fetch failed
+
+    futures_data = raw_futures if isinstance(raw_futures, list) else None
+
+    return cash_data, futures_data
+
+
+async def _authenticated_fetch() -> tuple[dict[str, Any] | None, list[Any] | None]:
+    """Fetch cash bids (and futures quotes), refreshing cookies via Selenium if needed."""
     cookies = _load_cookies()
     if cookies:
-        data = await _fetch(cookies)
-        if data is not None:
-            return data
+        cash_data, futures_data = await _fetch(cookies)
+        if cash_data is not None:
+            return cash_data, futures_data
 
     log.info("elevator_reauth_starting")
     cookies = await asyncio.to_thread(_selenium_authenticate)
     if not cookies:
         log.error("elevator_reauth_failed")
-        return None
+        return None, None
 
     _save_cookies(cookies)
     return await _fetch(cookies)
@@ -324,30 +355,32 @@ async def run_once() -> None:
         log.warning("elevator_no_names_configured")
         return
 
-    json_data = await _authenticated_fetch()
+    json_data, futures_data = await _authenticated_fetch()
     if json_data is None:
         log.error("elevator_scrape_aborted_no_data")
         return
 
     # Raw snapshot to MongoDB for historical record
-    await save_elevator_snapshot(
-        {
-            "raw_response": json_data,
-            "elevator_names_requested": elevator_names,
-        }
-    )
+    snapshot: dict[str, Any] = {
+        "raw_response": json_data,
+        "elevator_names_requested": elevator_names,
+    }
+    if futures_data is not None:
+        snapshot["futures_response"] = futures_data
+        log.debug("elevator_futures_snapshot_included", count=len(futures_data))
+
+    await save_elevator_snapshot(snapshot)
 
     records, scraped_at = _parse(json_data, elevator_names)
     if not records:
         log.warning("elevator_no_records_for_configured_elevators", names=elevator_names)
         return
 
-    time_str = scraped_at.isoformat()
     stored = 0
     for rec in records:
         try:
             await insert_cash_price(
-                time=time_str,
+                time=scraped_at,
                 elevator=rec["elevator"],
                 commodity=rec["commodity"],
                 cash_price=rec["cash_price"],

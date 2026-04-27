@@ -48,7 +48,7 @@ async def pull_symbol(symbol: str) -> dict[str, Any] | None:
             return None
         row = hist.iloc[-1]
         return {
-            "time": datetime.now(tz=timezone.utc).isoformat(),
+            "time": datetime.now(tz=timezone.utc),
             "symbol": symbol,
             "open": float(row["Open"]) if "Open" in row else None,
             "high": float(row["High"]) if "High" in row else None,
@@ -71,7 +71,7 @@ async def pull_and_store(symbol: str) -> None:
         last = await get_latest_futures(symbol)
         if last is not None:
             await upsert_futures_price(
-                time=datetime.now(tz=timezone.utc).isoformat(),
+                time=datetime.now(tz=timezone.utc),
                 symbol=symbol,
                 open=last["open"],
                 high=last["high"],

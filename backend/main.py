@@ -6,6 +6,8 @@ WebSocket price feed at /ws/prices.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import structlog
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
@@ -54,11 +56,16 @@ async def startup() -> None:
     # Wire the WebSocket broadcaster into the feed.
     register_price_callback(on_new_price)
 
-    # Pull prices once immediately on startup, then on schedule.
-    await run_once()
-
+    # Schedule feeds. next_run_time=now fires the first tick immediately without
+    # blocking startup -- a failure in the feed will not crash the API.
     interval = settings.schedule.futures_feed_interval_min
-    _scheduler.add_job(run_once, "interval", minutes=interval, id="futures_feed")
+    _scheduler.add_job(
+        run_once,
+        "interval",
+        minutes=interval,
+        id="futures_feed",
+        next_run_time=datetime.now(tz=timezone.utc),
+    )
 
     elevator_interval = settings.elevator.scraper_interval_hrs
     _scheduler.add_job(

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 import asyncpg
 import structlog
 from asyncpg import Connection, Pool
@@ -58,7 +60,7 @@ async def fetchrow(sql: str, *args: object) -> asyncpg.Record | None:
 
 async def upsert_futures_price(
     *,
-    time: str,
+    time: datetime,
     symbol: str,
     open: float | None,
     high: float | None,
@@ -101,7 +103,7 @@ async def get_futures_history(symbol: str, days: int = 90) -> list[asyncpg.Recor
 
 async def insert_cash_price(
     *,
-    time: str,
+    time: datetime,
     elevator: str,
     commodity: str,
     cash_price: float,
@@ -134,7 +136,7 @@ async def get_latest_cash(elevator: str, commodity: str) -> asyncpg.Record | Non
 
 async def insert_options_snapshot(
     *,
-    time: str,
+    time: datetime,
     position_id: str,
     underlying_px: float,
     option_px: float | None,

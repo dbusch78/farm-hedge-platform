@@ -72,6 +72,7 @@ class ElevatorSettings(BaseSettings):
     rvc_password: str = ""
     rvc_base: str = "https://shop.rivervalleycoop.com"
     cash_bids_url: str = ""
+    futures_url: str = ""  # e.g. https://shop.rivervalleycoop.com/api/v1/commodity/futures
     names: str = ""  # comma-separated elevator names, e.g. "Toulon,Kewanee"
     cookie_path: str = ".cache/elevator_cookies.pkl"
     scraper_interval_hrs: int = 1
