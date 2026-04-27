@@ -9,6 +9,9 @@ services:
     volumes:
       - ./data/npm:/data
       - ./data/npm-letsencrypt:/etc/letsencrypt
+    networks:
+      - default
+      - internal
     restart: unless-stopped
 
   timescaledb:

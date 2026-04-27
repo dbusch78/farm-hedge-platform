@@ -121,6 +121,16 @@ This creates:
 | `grafana.farm.local` | `grafana` | `3000` |
 | `npm.farm.local` | `nginx-proxy-manager` | `81` |
 
+> **Network topology note:** NPM must be attached to both the `default` and `internal`
+> Docker networks. App services (`fastapi`, `nextjs`, `grafana`) live on `internal` only
+> for isolation; NPM bridges both so it can receive external traffic on `default` (ports
+> 80/443/81) and reach upstreams on `internal`. This is already correct in
+> `docker-compose.yml` — do not remove the `networks:` block from the
+> `nginx-proxy-manager` service. If NPM shows upstream hosts as "Online" but every
+> hostname returns 502, the most likely cause is that NPM lost its `internal` network
+> attachment (e.g. after a compose file edit) — recreate it with
+> `docker compose up -d nginx-proxy-manager`.
+
 ### 6. Seed existing positions (optional)
 
 ```bash
