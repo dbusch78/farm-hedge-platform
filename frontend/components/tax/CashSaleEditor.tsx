@@ -17,6 +17,8 @@ export default function CashSaleEditor({ sale }: Props) {
 
   const [form, setForm] = useState({
     sale_date: sale.sale_date ?? "",
+    bushels: String(sale.bushels ?? ""),
+    cash_price_per_bu: String(sale.cash_price_per_bu ?? ""),
     delivery_location: sale.delivery_location ?? "",
     selling_entity: sale.selling_entity ?? "",
     contract_settlement_id: sale.contract_settlement_id ?? "",
@@ -35,6 +37,8 @@ export default function CashSaleEditor({ sale }: Props) {
       try {
         await updateCashSale(sale.id, {
           sale_date: form.sale_date || undefined,
+          bushels: form.bushels ? parseInt(form.bushels, 10) : undefined,
+          cash_price_per_bu: form.cash_price_per_bu ? parseFloat(form.cash_price_per_bu) : undefined,
           delivery_location: form.delivery_location || null,
           selling_entity: form.selling_entity || null,
           contract_settlement_id: form.contract_settlement_id || null,
@@ -68,12 +72,41 @@ export default function CashSaleEditor({ sale }: Props) {
               style={{ width: 120 }}
             />
           </td>
-          <td className={cellCls}>{sale.bushels.toLocaleString()}</td>
-          <td className={cellCls}>${sale.cash_price_per_bu.toFixed(4)}</td>
-          <td className={cellCls}>${sale.gross_amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+          <td className={cellCls}>
+            <input
+              name="bushels"
+              type="number"
+              value={form.bushels}
+              onChange={handleChange}
+              className={inputCls}
+              placeholder="bushels"
+              style={{ width: 80 }}
+            />
+          </td>
+          <td className={cellCls}>
+            <input
+              name="cash_price_per_bu"
+              type="number"
+              step="0.0001"
+              value={form.cash_price_per_bu}
+              onChange={handleChange}
+              className={inputCls}
+              placeholder="$/bu"
+              style={{ width: 80 }}
+            />
+          </td>
+          <td className={cellCls + " text-[#4a5568]"}>
+            {/* gross is derived — show live preview, read-only */}
+            ${(
+              (parseFloat(form.bushels || "0")) *
+              (parseFloat(form.cash_price_per_bu || "0"))
+            ).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+          </td>
           <td className={cellCls}>
             <input
               name="adjustments"
+              type="number"
+              step="0.01"
               value={form.adjustments}
               onChange={handleChange}
               className={inputCls}
@@ -84,6 +117,8 @@ export default function CashSaleEditor({ sale }: Props) {
           <td className={cellCls}>
             <input
               name="trucking_per_bu"
+              type="number"
+              step="0.001"
               value={form.trucking_per_bu}
               onChange={handleChange}
               className={inputCls}
@@ -92,11 +127,13 @@ export default function CashSaleEditor({ sale }: Props) {
             />
           </td>
           <td className={cellCls}>
-            {/* recompute net optimistically */}
+            {/* net preview: gross - adjustments - trucking_total */}
             ${(
-              sale.gross_amount
+              (parseFloat(form.bushels || "0") * parseFloat(form.cash_price_per_bu || "0"))
               - parseFloat(form.adjustments || "0")
-              - (form.trucking_per_bu ? parseFloat(form.trucking_per_bu) * sale.bushels : (sale.trucking_total ?? 0))
+              - (form.trucking_per_bu
+                  ? parseFloat(form.trucking_per_bu) * parseFloat(form.bushels || "0")
+                  : (sale.trucking_total ?? 0))
             ).toLocaleString("en-US", { minimumFractionDigits: 2 })}
           </td>
           <td className={cellCls}>

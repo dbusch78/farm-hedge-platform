@@ -74,6 +74,19 @@ async def update_cash_sale_endpoint(
                 after_value=json.dumps(new_val),
             )
 
+    # Recompute derived fields if any inputs changed
+    bushels = updates.get("bushels", existing.get("bushels", 0))
+    price = updates.get("cash_price_per_bu", existing.get("cash_price_per_bu", 0.0))
+    adjustments = updates.get("adjustments", existing.get("adjustments", 0.0))
+    trucking_per_bu = updates.get("trucking_per_bu", existing.get("trucking_per_bu"))
+    trucking_total = round(trucking_per_bu * bushels, 2) if trucking_per_bu is not None else existing.get("trucking_total") or 0.0
+    gross = round(bushels * price, 2)
+    net = round(gross - (adjustments or 0.0) - trucking_total, 2)
+    updates["gross_amount"] = gross
+    updates["net_amount"] = net
+    if trucking_per_bu is not None:
+        updates["trucking_total"] = trucking_total
+
     await update_cash_sale(sale_id, updates)
     updated = await get_cash_sale(sale_id)
     return _enrich_cash_sale(updated)  # type: ignore[arg-type]
