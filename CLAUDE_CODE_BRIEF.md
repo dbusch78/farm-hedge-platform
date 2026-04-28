@@ -120,7 +120,6 @@ Set these local DNS records in the UniFi controller so all devices on LAN and VP
 |---|---|---|
 | `farm.local` | VM LAN IP | Next.js dashboard |
 | `api.farm.local` | VM LAN IP | FastAPI backend |
-| `grafana.farm.local` | VM LAN IP | Grafana historical charts |
 | `npm.farm.local` | VM LAN IP | Nginx Proxy Manager admin UI |
 
 All routing handled by Nginx Proxy Manager. One IP, clean hostnames, no port numbers on mobile.
@@ -137,7 +136,6 @@ Run as a Docker container. Provides:
 # Proxy host entries to configure in NPM admin UI:
 # farm.local          --> nextjs:3000
 # api.farm.local      --> fastapi:8000
-# grafana.farm.local  --> grafana:3000
 # (npm.farm.local:81 is NPM's own admin, no proxy needed)
 ```
 
@@ -148,7 +146,6 @@ TimescaleDB and MongoDB must NOT be exposed on the host network interface. They 
 | Container | Host Port | Accessible At |
 |---|---|---|
 | nginx-proxy-manager | 80, 443, 81 | Handles all external routing |
-| grafana | 3001 | grafana.farm.local (via NPM) |
 
 All other containers (Next.js, FastAPI, TimescaleDB, MongoDB) communicate internally on the Docker network only.
 
@@ -214,14 +211,14 @@ All other containers (Next.js, FastAPI, TimescaleDB, MongoDB) communicate intern
 ┌──────────────────────────────────────────────────────────────────────┐
 │              PRESENTATION LAYER                                      │
 ├──────────────────────────────┬───────────────────────────────────────┤
-│  Next.js 15  (farm.local)    │  Grafana  (grafana.farm.local)        │
-│                              │                                       │
-│  Card-based dark UI          │  TimescaleDB-connected dashboards     │
-│  TradingView charts          │  Price history, basis trends          │
-│  Interactive tools           │  P&L over time, weather history       │
-│  Mobile responsive           │  Agent accuracy retrospective         │
-│  Paper / Live toggle         │  GDU accumulation charts              │
-└──────────────────────────────┴───────────────────────────────────────┘
+│              Next.js 15  (farm.local)                                │
+│                                                                      │
+│  Card-based dark UI          TradingView Lightweight Charts          │
+│  Interactive tools           Price history, basis trends             │
+│  Mobile responsive           P&L over time, weather history          │
+│  Paper / Live toggle         Agent accuracy retrospective            │
+│                              GDU accumulation charts                 │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -273,7 +270,6 @@ All other containers (Next.js, FastAPI, TimescaleDB, MongoDB) communicate intern
 | Reverse proxy | Nginx Proxy Manager | Docker container, web UI config, hostname routing |
 | DNS | UniFi Network controller | Local DNS records for *.farm.local hostnames |
 | VPN | Ubiquiti Dream Machine (existing) | Operator's existing infrastructure, no changes needed |
-| Historical charts | Grafana | Connects directly to TimescaleDB via Postgres connector |
 | Backups | pg_dump + mongodump via cron | Daily, to operator's existing backup infrastructure |
 
 ---
@@ -825,19 +821,16 @@ Work through milestones in order. Each milestone should be fully working before 
 - [x] Write `docker-compose.yml` with all services (see Section 10 template below)
 - [ ] TimescaleDB container starts and is reachable on internal Docker network
 - [ ] MongoDB container starts and is reachable on internal Docker network
-- [ ] Grafana container starts
 
 #### Nginx Proxy Manager
 - [ ] NPM container starts and admin UI is reachable at VM-IP:81
 - [ ] Configure proxy host: `farm.local` --> `nextjs:3000`
 - [ ] Configure proxy host: `api.farm.local` --> `fastapi:8000`
-- [ ] Configure proxy host: `grafana.farm.local` --> `grafana:3000`
 - [ ] Configure proxy host: `npm.farm.local` --> NPM admin :81
 
 #### UniFi DNS
 - [ ] Add local DNS record: `farm.local` --> VM LAN IP
 - [ ] Add local DNS record: `api.farm.local` --> VM LAN IP
-- [ ] Add local DNS record: `grafana.farm.local` --> VM LAN IP
 - [ ] Add local DNS record: `npm.farm.local` --> VM LAN IP
 - [ ] Verify `farm.local` resolves from a phone on the LAN
 - [ ] Verify `farm.local` resolves from a phone on VPN (outside LAN)
@@ -853,7 +846,6 @@ Work through milestones in order. Each milestone should be fully working before 
 - [ ] All containers healthy: `docker compose ps` shows no unhealthy or restarting services
 - [ ] `farm.local` loads (Next.js placeholder) from phone on VPN
 - [ ] `api.farm.local/docs` loads FastAPI OpenAPI docs
-- [ ] `grafana.farm.local` loads Grafana login
 
 ---
 
@@ -934,21 +926,50 @@ Work through milestones in order. Each milestone should be fully working before 
 - [x] Implement position entry form (`PositionEntry.tsx`) -- all fields, delta-adjusted count calculated live as operator types
 - [ ] Mobile layout verified: all elements usable on a phone screen (verify after Docker up)
 
-#### Grafana -- Initial Dashboards
-- [ ] Connect Grafana to TimescaleDB via Postgres data source
-- [ ] Build dashboard: Futures Prices (ZC/ZS/ZW OHLC over time)
-- [ ] Build dashboard: Basis History (cash vs. futures, 3-year average overlay)
-- [ ] Build dashboard: Net Effective Price over crop year
-- [ ] Export dashboard JSONs to `grafana/provisioning/dashboards/` so they auto-load on container recreate
-- [ ] Link from Next.js hedge detail page to relevant Grafana dashboard
+#### In-App Analytics Page (replaces Grafana -- see Milestone 2B)
+- [ ] Milestone 2B tasks tracked separately below -- Milestone 2 acceptance does not depend on them
 
 #### Milestone 2 Acceptance Criteria
-- [ ] `farm.local` loads on phone over VPN and shows live hedge card with real prices
-- [ ] Hedge card prices update without page refresh
-- [ ] Position entry form calculates delta-adjusted contract count correctly
-- [ ] Scenario modeler returns correct table when given 5 hypothetical futures prices
-- [ ] TradingView chart renders ZC candlestick with basis overlay
-- [ ] Grafana basis history dashboard shows correct data
+- [x] `farm.local` loads on phone over VPN and shows live hedge card with real prices
+- [x] Hedge card prices update without page refresh
+- [x] Position entry form calculates delta-adjusted contract count correctly
+- [x] Scenario modeler returns correct table when given 5 hypothetical futures prices
+- [x] TradingView chart renders ZC candlestick with basis overlay
+
+---
+
+---
+
+### MILESTONE 2B -- In-App Analytics Dashboards
+**Goal:** Replace what Grafana was planned to provide — historical charts for futures prices, basis trends, net effective price over time, and eventually weather and agent metrics — all embedded in the Next.js app with no separate login or subdomain. TradingView Lightweight Charts is already integrated; this milestone extends it to historical/analytical views.
+
+**Decision rationale:** Grafana was sunsetted (2026-04-28) because it required a separate login, a separate subdomain, complex provisioning, and a full extra container — all for what amounts to a few time-series charts that TradingView already handles better in-app. Alerting is handled by Python workers (Milestone 4.5), not Grafana alerting.
+
+#### Analytics Page (`/analytics`)
+- [ ] Create `app/analytics/page.tsx` — tabbed or sectioned layout, server component
+- [ ] Section: **Futures Prices** — ZC/ZS/ZW close price history (TradingView time series, configurable lookback 30/90/365 days)
+- [ ] Section: **Basis History** — cash price vs. futures ref, basis line, 3-year average basis overlay; per elevator selector
+- [ ] Section: **Net Effective Price** — net effective price per bushel over the crop year, with premium cost visible as a deduction layer
+- [ ] Add link to `/analytics` from the `/hedge` page and main nav
+
+#### Weather Charts (add after Milestone 3 data exists)
+- [ ] Section: **On-Farm Weather** — temp, rain, GDU cumulative vs. historical average (line chart)
+- [ ] Section: **Corn Belt Regional** — soil moisture, precipitation anomaly
+- [ ] Section: **South America** — Mato Grosso and Pampas precip and soil moisture trends
+
+#### Agent Metrics (add after Milestone 4 data exists)
+- [ ] Section: **Agent History** — confidence scores over time, token cost per agent per month
+- [ ] Section: **Positioning Accuracy** — annotated runs with actual vs. predicted outcome overlay
+
+#### Backend additions needed
+- [ ] `GET /api/analytics/futures-history?symbol=ZC=F&days=365` — OHLCV array for charting
+- [ ] `GET /api/analytics/basis-history?elevator=Toulon&days=180` — basis series
+- [ ] `GET /api/analytics/nep-history?days=365` — net effective price series (requires joining positions + options_snapshots)
+
+#### Milestone 2B Acceptance Criteria
+- [ ] `/analytics` loads with at least Futures Prices and Basis History charts showing real data
+- [ ] Charts are interactive (zoom/pan), mobile-usable
+- [ ] No separate login, no separate subdomain — embedded in the app at `farm.local/analytics`
 
 ---
 
@@ -991,8 +1012,7 @@ Work through milestones in order. Each milestone should be fully working before 
 - [ ] `GET /api/weather/gdu` -- GDU status
 - [ ] Update `WeatherCard.tsx` with real data
 - [ ] Implement `app/weather/page.tsx` with full weather detail panels
-- [ ] Add Grafana dashboards: on-farm weather history, corn belt soil moisture, SA regional weather
-- [ ] GDU accumulation chart in Grafana
+- [ ] Weather chart panels (on-farm history, corn belt soil moisture) added to in-app analytics page (Milestone 2B)
 
 #### Milestone 3 Acceptance Criteria
 - [ ] Ambient station data streaming into TimescaleDB continuously
@@ -1041,7 +1061,7 @@ Work through milestones in order. Each milestone should be fully working before 
 - [ ] Update `AgentCard.tsx` with real positioning advisor output and confidence
 - [ ] Add WASDE countdown to agent card (days until next release)
 - [ ] Implement `app/agents/page.tsx` -- full agent history with annotation controls
-- [ ] Add Grafana dashboard: agent run history, confidence scores over time, token cost tracking
+- [ ] Agent run history / cost charts added to in-app analytics page (Milestone 2B)
 
 #### Milestone 4 Acceptance Criteria
 - [ ] All five agents run without error
@@ -1050,6 +1070,54 @@ Work through milestones in order. Each milestone should be fully working before 
 - [ ] Positioning advisor output visible on main dashboard agent card
 - [ ] Phase transition alert fires and appears in UI given a test scenario
 - [ ] Agent history page shows runs with working annotation controls
+
+---
+
+---
+
+### MILESTONE 4.5 -- Notifications & Alerting
+**Goal:** Python-based alerting worker that evaluates thresholds on a schedule and delivers notifications via both email and Telegram. No extra infrastructure — runs as an APScheduler job inside the existing FastAPI container alongside the futures feed and elevator scraper.
+
+**Decision rationale:** Grafana alerting was dropped with Grafana. Email + Telegram covers both the "check your phone in the combine cab" use case (Telegram push) and the "archivable record" use case (email). Both have free tiers with no monthly cost.
+
+#### Alert Types to Implement
+- **Basis alert** — basis crosses operator-defined threshold (e.g., Toulon corn basis worse than -0.45)
+- **Phase transition alert** — price crosses a configured trigger relative to strike (e.g., futures within 5% of put strike)
+- **Net effective price alert** — NEP rises above a target (time to consider closing Phase 1 / opening Phase 2)
+- **Stale price alert** — yfinance feed has been stale for more than N minutes during market hours
+
+#### Backend
+- [ ] Create `farm_platform/alerts/notifier.py` — delivery layer; accepts a message string and fires both channels
+  - [ ] Email via SMTP (Gmail app password or Mailgun free tier — operator's choice, config in `.env`)
+  - [ ] Telegram via Bot API (`POST /sendMessage` to operator's personal bot + chat ID)
+  - [ ] Graceful degradation: if one channel fails, log error and attempt the other
+- [ ] Create `farm_platform/alerts/alert_worker.py` — APScheduler job (every 15 min)
+  - [ ] Evaluate all configured alert rules against current DB state
+  - [ ] Deduplicate: do not re-fire an alert that fired within the last cooldown window (e.g., 4 hours)
+  - [ ] Store each fired alert to MongoDB `alert_history` collection with: type, rule, value, threshold, channels_sent, timestamp
+  - [ ] Mark alert as acknowledged when operator calls the acknowledge endpoint
+- [ ] Wire alert worker into `backend/main.py` APScheduler on startup
+- [ ] Add new `.env` keys: `ALERT_EMAIL_FROM`, `ALERT_EMAIL_TO`, `ALERT_EMAIL_SMTP_HOST`, `ALERT_EMAIL_SMTP_PORT`, `ALERT_EMAIL_PASSWORD`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
+- [ ] Add new config section `AlertSettings` to `farm_platform/config.py`
+
+#### Alert Rules Config
+- [ ] Alert thresholds defined in `.env` (simple) or a YAML config file (operator's choice at implementation time)
+- [ ] Example `.env` approach: `ALERT_BASIS_CORN_MIN=-0.45`, `ALERT_NEP_CORN_TARGET=4.50`, `ALERT_STALE_MINUTES=30`
+
+#### FastAPI Routes
+- [ ] `GET /api/alerts` — list recent fired alerts (last 7 days), with acknowledged status
+- [ ] `POST /api/alerts/{id}/acknowledge` — mark acknowledged
+- [ ] `GET /api/alerts/config` — current threshold config (read-only, for display in UI)
+
+#### Frontend (light touch — Milestone 4.5 is primarily backend)
+- [ ] Alert history panel on main dashboard (unacknowledged alerts only, with acknowledge button)
+- [ ] Acknowledge clears alert from dashboard without page reload
+
+#### Milestone 4.5 Acceptance Criteria
+- [ ] Basis alert fires and sends both email and Telegram when test threshold is crossed
+- [ ] Duplicate suppression working — same alert does not fire twice within cooldown window
+- [ ] Alert history visible and acknowledgeable in the UI
+- [ ] Both channels deliver within 2 minutes of threshold crossing
 
 ---
 
@@ -1131,7 +1199,6 @@ Work through milestones in order. Each milestone should be fully working before 
 - [ ] Verify backup cron is running and test restore from backup
 - [ ] Container restart policy set to `unless-stopped` for all services
 - [ ] Document all operator-configurable parameters in README
-- [ ] Add Grafana dashboard: agent cost tracking (token spend by agent over time)
 
 ---
 
@@ -1203,18 +1270,6 @@ services:
       - fastapi
     restart: unless-stopped
 
-  grafana:
-    image: grafana/grafana:latest
-    environment:
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
-      GF_SERVER_ROOT_URL: http://grafana.farm.local
-    volumes:
-      - ./data/grafana:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning
-    networks:
-      - internal
-    restart: unless-stopped
-
 networks:
   internal:
     driver: bridge
@@ -1272,7 +1327,7 @@ Obtain these before starting Milestone 1. All have free tiers adequate for this 
 
 Out of scope for initial build but the architecture supports these without major rework:
 
-- **Push alerts** -- ntfy.sh (self-hosted, free) for phase transition alerts to phone without building a notification system. One Docker container, push to your phone natively.
+- **Push alerts** -- planned in Milestone 4.5 via email (SMTP) + Telegram Bot API. No additional infrastructure required.
 - **NDVI satellite data** -- NASA POWER API for crop stress signals before they appear in news or USDA data. Free and REST-accessible.
 - **Options chain research** -- Barchart free web tier scrape for researching strikes before entering positions. Complements yfinance which has limited options chain data for futures.
 - **Revenue Protection crop insurance integration** -- Track the RP guarantee price alongside options positions to avoid double-counting downside protection.
