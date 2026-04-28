@@ -26,7 +26,6 @@ This project has two target environments. The setup steps differ only in how DNS
 | Hostnames resolve via | Windows `hosts` file (`C:\Windows\System32\drivers\etc\hosts`) | UniFi Dream Machine DNS overrides |
 | All hostnames point to | `127.0.0.1` | VM's LAN IP |
 | NPM admin | `http://localhost:81` | `http://<vm-ip>:81` |
-| Grafana direct | `http://localhost:3001` | `http://<vm-ip>:3001` |
 
 Everything else — Docker commands, database init, NPM proxy config, acceptance tests — is identical between the two environments.
 
@@ -54,7 +53,6 @@ Key `.env` values to set before first boot:
 | `POSTGRES_DSN` | Update password to match above |
 | `MONGO_PASSWORD` | Any strong password |
 | `MONGO_URI` | Update password to match above |
-| `GRAFANA_PASSWORD` | Any strong password |
 | `ANTHROPIC_API_KEY` | From console.anthropic.com (needed for Milestone 4) |
 | `ELEVATOR_RVC_EMAIL` | Your RVC account email |
 | `ELEVATOR_RVC_PASSWORD` | Your RVC account password |
@@ -67,7 +65,7 @@ Key `.env` values to set before first boot:
 docker compose up -d --build
 ```
 
-This starts: TimescaleDB, MongoDB, FastAPI backend, Next.js frontend, Grafana, and Nginx Proxy Manager.
+This starts: TimescaleDB, MongoDB, FastAPI backend, Next.js frontend, and Nginx Proxy Manager.
 
 Check that all containers came up healthy:
 
@@ -100,11 +98,10 @@ This creates:
 ```
 127.0.0.1  farm.local
 127.0.0.1  api.farm.local
-127.0.0.1  grafana.farm.local
 127.0.0.1  npm.farm.local
 ```
 
-**Ubuntu VM (production)** — on your UniFi Dream Machine, add DNS overrides pointing all four `*.farm.local` names to the VM's LAN IP.
+**Ubuntu VM (production)** — on your UniFi Dream Machine, add DNS overrides pointing all three `*.farm.local` names to the VM's LAN IP.
 
 ### 5. Configure Nginx Proxy Manager
 
@@ -112,18 +109,17 @@ This creates:
    - WSL/Windows: `http://localhost:81`
    - Ubuntu VM: `http://<vm-ip>:81`
 2. Default login: `admin@example.com` / `changeme` (you will be forced to change it)
-3. Add four proxy hosts (forward hostname is always the Docker service name — same in both environments):
+3. Add three proxy hosts (forward hostname is always the Docker service name — same in both environments):
 
 | Domain | Forward Hostname | Forward Port |
 |--------|-----------------|-------------|
 | `farm.local` | `nextjs` | `3000` |
 | `api.farm.local` | `fastapi` | `8000` |
-| `grafana.farm.local` | `grafana` | `3000` |
 | `npm.farm.local` | `nginx-proxy-manager` | `81` |
 
 > **Network topology note:** NPM must be attached to both the `default` and `internal`
-> Docker networks. App services (`fastapi`, `nextjs`, `grafana`) live on `internal` only
-> for isolation; NPM bridges both so it can receive external traffic on `default` (ports
+> Docker networks. App services (`fastapi`, `nextjs`) live on `internal` only for
+> isolation; NPM bridges both so it can receive external traffic on `default` (ports
 > 80/443/81) and reach upstreams on `internal`. This is already correct in
 > `docker-compose.yml` — do not remove the `networks:` block from the
 > `nginx-proxy-manager` service. If NPM shows upstream hosts as "Online" but every
@@ -150,9 +146,7 @@ Edit `scripts/seed_positions.py` to fill in your actual position data before run
 | Dashboard | http://farm.local | http://farm.local |
 | Hedge detail | http://farm.local/hedge | http://farm.local/hedge |
 | FastAPI docs | http://api.farm.local/docs | http://api.farm.local/docs |
-| Grafana | http://grafana.farm.local | http://grafana.farm.local |
 | NPM admin | http://localhost:81 | http://npm.farm.local |
-| Grafana (direct, no NPM) | http://localhost:3001 | http://\<vm-ip\>:3001 |
 
 ---
 
@@ -228,7 +222,6 @@ Work through these after the Docker stack is up and DNS is resolving. Substitute
 ### Infrastructure
 - [x] `docker compose ps` shows all services running, none restarting
 - [x] `http://api.farm.local/docs` loads FastAPI OpenAPI UI
-- [x] `http://grafana.farm.local` loads Grafana login
 - [x] `http://farm.local` loads the dashboard in a browser
 
 ### Live prices and WebSocket
@@ -265,7 +258,7 @@ Work through these after the Docker stack is up and DNS is resolving. Substitute
 After a fresh `docker compose up --build`, run these in order to confirm everything is wired correctly:
 
 ```bash
-# 1. All six containers running, none restarting
+# 1. All five containers running, none restarting
 docker compose ps
 
 # 2. Initialize databases (run once only)
@@ -279,11 +272,9 @@ docker compose exec timescaledb psql -U farm -d farm_platform \
   -c "SELECT COUNT(*) FROM futures_prices;"
 # Expected: count > 0
 
-# 5. Grafana starts without permission errors
-docker compose logs grafana | grep -i "permission denied" && echo "PERMISSION ERROR" || echo "Grafana OK"
 ```
 
-All six containers must stay `running` for at least 2 minutes. `docker compose logs fastapi` must show `Application startup complete` with no traceback.
+All five containers must stay `running` for at least 2 minutes. `docker compose logs fastapi` must show `Application startup complete` with no traceback.
 
 ---
 
@@ -325,6 +316,5 @@ docker compose up -d --build nextjs
 | Frontend | Next.js 16 / React 19 / Tailwind v4 |
 | Charts | TradingView Lightweight Charts v5 |
 | Reverse proxy | Nginx Proxy Manager |
-| Observability | Grafana |
 | Market data | yfinance (ZC, ZS, ZW futures) |
 | AI agents | Anthropic Claude API (Milestone 4) |

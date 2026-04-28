@@ -9,8 +9,6 @@
 - Adopted GitHub Issues workflow — bugs now tracked and closed via `gh` CLI.
 - Fixed NPM 502 on all proxy hosts (Issue #1) — NPM was on `default` network only;
   all upstreams were on `internal`. Added `networks: [default, internal]` to NPM service.
-- Fixed Grafana plugin permission error (Issue #2) — added `GF_PLUGINS_PREINSTALL_AUTO_UPDATE=false`;
-  created stub provisioning subdirs to clear 4 startup errors.
 - Fixed NPM running as root (Issue #3) — set `PUID=1000 PGID=1000` on NPM service.
 - Added mobile hamburger nav (Issue #4) — `hidden sm:flex` was leaving mobile users
   with no way to reach Agents/Hedge/etc. New `MobileNav` client component added.
@@ -21,11 +19,17 @@
   `NEXT_PUBLIC_API_URL` (`http://api.farm.local`) which resolves to `127.0.0.1`
   inside the nextjs container. Changed to `INTERNAL_API_URL=http://fastapi:8000`.
 - Milestone 2 acceptance checklist fully verified by user on 2026-04-28.
+- **Sunset Grafana** — removed from `docker-compose.yml`. Decision: Grafana adds login
+  friction, separate subdomain, and provisioning complexity for no benefit over in-app
+  TradingView charts. Alerting will be handled by a Python worker (APScheduler job)
+  that sends email/Telegram notifications — no Grafana alerting needed. The `grafana/`
+  directory is kept as archive only.
 
-### What comes next — Milestone 2 Grafana
-- [ ] Connect Grafana to TimescaleDB
-- [ ] Build 3 dashboards: futures OHLC, basis history, net effective price
-- [ ] Export dashboard JSONs to `grafana/provisioning/dashboards/`
+### What comes next — Milestone 3 (Weather)
+- `farm_platform/feeds/ambient_feed.py` — Ambient Weather WebSocket + REST
+- `farm_platform/feeds/openmeteo_feed.py` — 4 regions (corn belt, MT/PR/pampas)
+- `farm_platform/feeds/gdu_calculator.py` — GDU from planting date
+- FastAPI weather routes + WeatherCard real data (replace placeholder)
 
 ---
 
