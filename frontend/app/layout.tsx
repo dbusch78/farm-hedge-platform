@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import MobileNav from "@/components/MobileNav";
 
 export const metadata: Metadata = {
   title: "Farm Platform",
@@ -32,6 +33,7 @@ export default function RootLayout({
             </div>
             <div className="flex items-center gap-2 text-xs text-[#7b8aab]">
               <span className="hidden sm:inline">api.farm.local</span>
+              <MobileNav />
             </div>
           </nav>
         </header>
