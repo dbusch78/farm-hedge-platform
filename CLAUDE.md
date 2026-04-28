@@ -130,29 +130,35 @@ correctly displayed on per-position views. The aggregation produces a new value
 
 ### Display routing rule
 
-- **Hedge card / commodity rollup**: show the weighted aggregate
-- **Position detail card**: show that position's own values
+- **Hedge card / commodity rollup**: show the weighted aggregate from `/net-price`
+- **Position detail card**: show that position's own values from `GET /positions`
 - A position card must never display the rollup that includes itself — that is
   circular and uninformative (it hides per-position differences)
 
 If you find yourself passing the aggregate object to per-position render logic,
 stop. The per-position render needs the position's own record, not the rollup.
 
-### How to compute per-position P&L in the frontend
+### Where per-position P&L lives
 
-Do not fetch or pass the aggregate. Compute inline from the position record:
+The backend computes per-position `options_pnl_per_bu`, `net_effective_price`,
+and `net_effective_vs_spot_per_bu` during `GET /positions` and attaches them to
+each active position record. The frontend reads these fields directly:
 
 ```typescript
-// intrinsic value
-const intrinsic = isPhase1
-  ? Math.max(pos.strike - futuresClose, 0)   // put
-  : Math.max(futuresClose - pos.strike, 0);  // call
-
-const positionPnl = intrinsic - pos.premium_paid_per_bu;
-
-// net effective price
-const cashBase = isPhase1 ? futuresClose : (pos.cash_sale_price ?? futuresClose);
-const netEffPrice = cashBase + intrinsic - pos.premium_paid_per_bu;
+const positionPnl  = pos.options_pnl_per_bu ?? null;
+const netEffPrice  = pos.net_effective_price ?? null;
+const netEffVsSpot = pos.net_effective_vs_spot_per_bu ?? null;
 ```
+
+Do not recompute P&L in the frontend. The backend uses `calc_phase1`/`calc_phase2`
+with the position's own `cash_sale_price` (Phase 2) or futures as cash proxy
+(Phase 1). Duplicating that logic in the frontend creates divergence.
+
+### Puts and calls are never blended
+
+Phase 1 puts and Phase 2 calls use different P&L formulas and represent different
+strategies. The `/net-price` endpoint groups by `(commodity, phase)` — not just
+`commodity` — so ZC puts and ZC calls produce separate rows. The hedge page renders
+separate cards for each `(commodity, phase)` group.
 
 ---

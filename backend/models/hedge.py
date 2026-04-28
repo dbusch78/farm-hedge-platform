@@ -97,6 +97,11 @@ class PositionResponse(BaseModel):
     exit_reason: str | None = None
     realized_pnl_per_bu: float | None = None
     notes: str = ""
+    # Live P&L — populated for ACTIVE positions; None for closed/expired
+    underlying_price: float | None = None
+    options_pnl_per_bu: float | None = None
+    net_effective_price: float | None = None
+    net_effective_vs_spot_per_bu: float | None = None
 
 
 class AuditEntry(BaseModel):

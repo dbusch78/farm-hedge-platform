@@ -28,6 +28,11 @@ export interface Position {
   exit_reason: string | null;
   realized_pnl_per_bu: number | null;
   notes: string;
+  // Live P&L — populated for ACTIVE positions by GET /positions
+  underlying_price?: number | null;
+  options_pnl_per_bu?: number | null;
+  net_effective_price?: number | null;
+  net_effective_vs_spot_per_bu?: number | null;
 }
 
 export interface PositionCreate {

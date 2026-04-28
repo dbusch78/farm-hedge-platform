@@ -55,20 +55,45 @@ POS_B = {
 
 FAKE_LATEST = {"close": FUTURES_PRICE, "stale": False}
 
+# A Phase 1 put position — must NOT be merged with Phase 2 calls even in same commodity.
+ZC_PUT = {
+    "commodity": "ZC",
+    "phase": 1,
+    "strike": 4.50,
+    "premium_paid_per_bu": 0.09,
+    "expected_bushels": 30_000,
+    "delta_at_entry": 0.22,
+    "cash_sale_price": None,
+    "status": "ACTIVE",
+}
+
+ZC_CALL = {
+    "commodity": "ZC",
+    "phase": 2,
+    "strike": 4.50,
+    "premium_paid_per_bu": 0.08,
+    "expected_bushels": 30_000,
+    "delta_at_entry": 0.50,
+    "cash_sale_price": 4.69,
+    "status": "ACTIVE",
+}
+
+ZC_FUTURES = {"close": 4.72, "stale": False}
+
 
 @pytest.mark.asyncio
-async def test_single_row_returned_per_commodity() -> None:
-    """Two positions in same commodity must collapse to one row, not two."""
+async def test_single_row_returned_per_commodity_phase() -> None:
+    """Two positions with same commodity AND phase must collapse to one row."""
     with (
         patch("backend.routers.hedge.get_all_positions", new_callable=AsyncMock, return_value=[POS_A, POS_B]),
         patch("backend.routers.hedge.get_latest_futures", new_callable=AsyncMock, return_value=FAKE_LATEST),
     ):
         result = await get_net_prices()
 
-    zs_rows = [r for r in result if r["commodity"] == "ZS"]
+    zs_rows = [r for r in result if r["commodity"] == "ZS" and r["phase"] == 2]
     assert len(zs_rows) == 1, (
-        f"Expected 1 ZS row after aggregation, got {len(zs_rows)}. "
-        "Multiple positions per commodity must be collapsed to one weighted-average row."
+        f"Expected 1 ZS phase-2 row after aggregation, got {len(zs_rows)}. "
+        "Multiple same-phase positions per commodity must collapse to one weighted-average row."
     )
 
 
@@ -134,3 +159,39 @@ async def test_single_position_commodity_passes_through() -> None:
     # POS_A: raw_contracts = 3.0, call_pnl ≈ +$1.22/bu
     assert abs(row["raw_contracts"] - 3.0) < 0.01
     assert row["options_pnl_per_bu"] > 1.0, "Single-position path must return POS_A's own pnl unchanged"
+
+
+@pytest.mark.asyncio
+async def test_puts_and_calls_never_blended_in_same_commodity() -> None:
+    """Phase 1 puts and Phase 2 calls in the same commodity must produce separate rows.
+
+    ZC has both a Phase 1 put (floor protection) and a Phase 2 call (upside
+    participation). These use different P&L formulas and represent different
+    strategies — blending them would produce a meaningless average.
+    """
+    def fake_latest(symbol: str):
+        return ZC_FUTURES
+
+    fake_futures = AsyncMock(side_effect=fake_latest)
+
+    with (
+        patch("backend.routers.hedge.get_all_positions", new_callable=AsyncMock, return_value=[ZC_PUT, ZC_CALL]),
+        patch("backend.routers.hedge.get_latest_futures", fake_futures),
+    ):
+        result = await get_net_prices()
+
+    zc_rows = [r for r in result if r["commodity"] == "ZC"]
+    assert len(zc_rows) == 2, (
+        f"Expected 2 ZC rows (one per phase), got {len(zc_rows)}. "
+        "Puts (phase 1) and calls (phase 2) must not be aggregated together."
+    )
+    phases = {r["phase"] for r in zc_rows}
+    assert phases == {1, 2}, f"Expected phases {{1, 2}}, got {phases}"
+
+    put_row  = next(r for r in zc_rows if r["phase"] == 1)
+    call_row = next(r for r in zc_rows if r["phase"] == 2)
+
+    # Put P&L: max(4.50 - 4.72, 0) - 0.09 = -0.09 (OTM)
+    assert put_row["options_pnl_per_bu"] < 0, "OTM put should have negative P&L"
+    # Call P&L: max(4.72 - 4.50, 0) - 0.08 = 0.14 (ITM)
+    assert call_row["options_pnl_per_bu"] > 0, "ITM call should have positive P&L"

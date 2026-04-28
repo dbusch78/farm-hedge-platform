@@ -39,6 +39,49 @@ log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/api/hedge", tags=["hedge"])
 
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _enrich_position_pnl(pos: dict[str, Any], underlying: float) -> None:
+    """Attach live P&L fields to a position dict in-place.
+
+    Uses the position's own cash_sale_price (Phase 2) or futures as the cash
+    proxy (Phase 1). Never uses a commodity-level aggregate.
+    """
+    try:
+        if pos["phase"] == 1:
+            result = calc_phase1(
+                current_cash_price=underlying,
+                underlying_price=underlying,
+                strike=pos["strike"],
+                total_premiums_paid_per_bu=pos["premium_paid_per_bu"],
+                expected_bushels=pos["expected_bushels"],
+                delta_at_entry=pos["delta_at_entry"],
+            )
+            pos["options_pnl_per_bu"] = round(
+                result.put_intrinsic_value - result.total_premiums_paid, 4
+            )
+            pos["net_effective_price"] = result.net_effective_price
+        else:
+            cash_locked = pos.get("cash_sale_price") or underlying
+            result2 = calc_phase2(
+                cash_sale_price=cash_locked,
+                underlying_price=underlying,
+                call_strike=pos["strike"],
+                call_premium_paid_per_bu=pos["premium_paid_per_bu"],
+                total_premiums_paid_per_bu=pos["premium_paid_per_bu"],
+                expected_bushels=pos["expected_bushels"],
+                delta_at_entry=pos["delta_at_entry"],
+            )
+            pos["options_pnl_per_bu"] = round(result2.call_pnl, 4)
+            pos["net_effective_price"] = result2.net_effective_price
+        pos["net_effective_vs_spot_per_bu"] = round(
+            pos["net_effective_price"] - underlying, 4
+        )
+        pos["underlying_price"] = underlying
+    except Exception:
+        log.exception("position_pnl_enrich_error", position_id=pos.get("id"))
+
+
 # ── Positions ─────────────────────────────────────────────────────────────────
 
 @router.get("/positions", response_model=list[PositionResponse])
@@ -51,7 +94,28 @@ async def list_positions(
         resolved = "active" if active_only else "all"
     else:
         resolved = status
-    return await get_all_positions(status=resolved)
+    positions = await get_all_positions(status=resolved)
+
+    # Enrich active positions with live per-position P&L.
+    # Batch futures lookups: one fetch per commodity regardless of position count.
+    active_commodities = {
+        p["commodity"]
+        for p in positions
+        if p.get("status", "ACTIVE") == "ACTIVE"
+    }
+    underlying_by_commodity: dict[str, float] = {}
+    for commodity in active_commodities:
+        latest = await get_latest_futures(f"{commodity}=F")
+        if latest and latest["close"]:
+            underlying_by_commodity[commodity] = float(latest["close"])
+
+    for pos in positions:
+        if pos.get("status", "ACTIVE") == "ACTIVE":
+            underlying = underlying_by_commodity.get(pos["commodity"])
+            if underlying is not None:
+                _enrich_position_pnl(pos, underlying)
+
+    return positions
 
 
 @router.post("/positions", response_model=dict[str, str], status_code=201)
@@ -197,15 +261,16 @@ async def get_net_prices() -> list[dict[str, Any]]:
                 "raw_contracts": result2.raw_contracts,
                 "delta_adj_contracts": result2.delta_adj_contracts,
             })
-    # Aggregate per-commodity: weighted average by raw_contracts so that
-    # multiple positions in the same commodity (e.g. two bean put strikes)
-    # collapse to a single row instead of the frontend finding only the first.
-    by_commodity: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    # Aggregate by (commodity, phase) so puts and calls are never blended.
+    # Multiple same-strategy positions (e.g. two ZS call strikes) collapse to
+    # one weighted-average row; different strategies (ZC puts vs ZC calls) stay
+    # separate and become independent hedge cards on the frontend.
+    by_group: dict[tuple[str, int], list[dict[str, Any]]] = defaultdict(list)
     for r in results:
-        by_commodity[r["commodity"]].append(r)
+        by_group[(r["commodity"], r["phase"])].append(r)
 
     aggregated: list[dict[str, Any]] = []
-    for commodity, group in by_commodity.items():
+    for (commodity, phase), group in by_group.items():
         if len(group) == 1:
             aggregated.append(group[0])
             continue
@@ -216,7 +281,7 @@ async def get_net_prices() -> list[dict[str, Any]]:
 
         aggregated.append({
             "commodity": commodity,
-            "phase": group[0]["phase"],
+            "phase": phase,
             "underlying_price": group[0]["underlying_price"],
             "net_effective_price": _wavg("net_effective_price"),
             "put_intrinsic": _wavg("put_intrinsic"),

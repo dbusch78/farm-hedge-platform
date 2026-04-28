@@ -49,13 +49,23 @@ export default async function HedgePage() {
   const zcClosed = closedPositions.filter((p) => p.commodity === "ZC");
   const zsClosed = closedPositions.filter((p) => p.commodity === "ZS");
 
+  // Corn is split by phase: Phase 1 puts floor the downside, Phase 2 calls
+  // capture upside. They do different jobs and must not be blended.
+  const zcPuts   = zcPositions.filter((p) => p.phase === 1);
+  const zcCalls  = zcPositions.filter((p) => p.phase === 2);
+  const zcPutsClosed  = zcClosed.filter((p) => p.phase === 1);
+  const zcCallsClosed = zcClosed.filter((p) => p.phase === 2);
+
   const findPrice = (sym: string) => prices.find((p) => p.symbol === sym) ?? null;
-  const findNetPrice = (c: string) => netPriceList.find((r) => r.commodity === c) ?? null;
+  // Net-price rows are keyed by (commodity, phase) — never blend phases.
+  const findNetPrice = (c: string, phase: number) =>
+    netPriceList.find((r) => r.commodity === c && r.phase === phase) ?? null;
 
   const zcPrice = findPrice("ZC=F");
   const zsPrice = findPrice("ZS=F");
-  const zcNet = findNetPrice("ZC");
-  const zsNet = findNetPrice("ZS");
+  const zcPutsNet  = findNetPrice("ZC", 1);
+  const zcCallsNet = findNetPrice("ZC", 2);
+  const zsNet      = findNetPrice("ZS", zsPositions[0]?.phase ?? 2);
 
   const zcCash = (cashPrices ?? []).filter((c) => c.commodity === "ZC");
   const zsCash = (cashPrices ?? []).filter((c) => c.commodity === "ZS");
@@ -79,19 +89,37 @@ export default async function HedgePage() {
         </div>
       )}
 
-      {/* ── Corn section ─────────────────────────────────────────────────── */}
-      <CommoditySection
-        commodity="ZC"
-        label={`Corn${contractLabel(zcPositions.length ? zcPositions : zcClosed)}`}
-        icon="🌽"
-        positions={zcPositions}
-        closedPositions={zcClosed}
-        netPrice={zcNet}
-        currentPrice={zcPrice}
-        history={zcHistory ?? []}
-        cashHistory={zcCash}
-        borderColor="border-l-[#a3e635]"
-      />
+      {/* ── Corn: Phase 1 puts (downside floor) ──────────────────────────── */}
+      {(zcPuts.length > 0 || zcPutsClosed.length > 0) && (
+        <CommoditySection
+          commodity="ZC"
+          label={`Corn Puts${contractLabel(zcPuts.length ? zcPuts : zcPutsClosed)}`}
+          icon="🌽"
+          positions={zcPuts}
+          closedPositions={zcPutsClosed}
+          netPrice={zcPutsNet}
+          currentPrice={zcPrice}
+          history={zcHistory ?? []}
+          cashHistory={zcCash}
+          borderColor="border-l-[#a3e635]"
+        />
+      )}
+
+      {/* ── Corn: Phase 2 calls (upside participation) ───────────────────── */}
+      {(zcCalls.length > 0 || zcCallsClosed.length > 0) && (
+        <CommoditySection
+          commodity="ZC"
+          label={`Corn Calls${contractLabel(zcCalls.length ? zcCalls : zcCallsClosed)}`}
+          icon="🌽"
+          positions={zcCalls}
+          closedPositions={zcCallsClosed}
+          netPrice={zcCallsNet}
+          currentPrice={zcPrice}
+          history={zcHistory ?? []}
+          cashHistory={zcCash}
+          borderColor="border-l-[#84cc16]"
+        />
+      )}
 
       {/* ── Soybeans section ─────────────────────────────────────────────── */}
       <CommoditySection
@@ -118,15 +146,12 @@ export default async function HedgePage() {
 function SeasonSummary({
   activePositions,
   closedPositions,
-  netPrice,
 }: {
   activePositions: Position[];
   closedPositions: Position[];
-  netPrice: NetPriceResponse | null;
 }) {
   if (closedPositions.length === 0) return null;
 
-  const activeBushels = activePositions.reduce((s, p) => s + p.expected_bushels, 0);
   const closedBushels = closedPositions.reduce((s, p) => s + p.expected_bushels, 0);
 
   const realizedTotal = closedPositions.reduce(
@@ -134,9 +159,16 @@ function SeasonSummary({
     0,
   );
 
+  // Sum per-position MTM from enriched records — exact, never blended across phases.
+  const enrichedPositions = activePositions.filter(
+    (p) => p.options_pnl_per_bu != null,
+  );
   const activeMtmTotal =
-    netPrice && activeBushels > 0
-      ? netPrice.options_pnl_per_bu * activeBushels
+    enrichedPositions.length > 0
+      ? enrichedPositions.reduce(
+          (sum, p) => sum + (p.options_pnl_per_bu ?? 0) * p.expected_bushels,
+          0,
+        )
       : null;
 
   const combinedTotal =
@@ -214,7 +246,6 @@ function CommoditySection({
           <SeasonSummary
             activePositions={positions}
             closedPositions={closedPositions}
-            netPrice={netPrice}
           />
         </div>
         {futuresClose !== null && (
@@ -313,24 +344,12 @@ function PositionRow({
     ? `Holding ${pos.num_contracts} of ${fmt(fullHedgeTarget, 1)} contracts for full delta-neutral coverage of ${pos.expected_bushels.toLocaleString()} bu at live Δ=${liveDelta.toFixed(2)}. Partial coverage is intentional — this is floor protection, not a 1:1 hedge.`
     : `Phase 2 calls provide upside participation, not full coverage. ${pos.num_contracts} contracts at live Δ=${liveDelta.toFixed(2)} captures premium on a proportional share of production. Partial is the strategy.`;
 
-  // Per-position P&L and net effective price from this position's own data only.
-  // Never use the commodity aggregate here — it would be circular and hide
-  // per-position differences when multiple positions share a commodity.
-  const intrinsic = futuresClose !== null
-    ? (isPhase1
-        ? Math.max(pos.strike - futuresClose, 0)
-        : Math.max(futuresClose - pos.strike, 0))
-    : null;
-  const positionPnl = intrinsic !== null ? intrinsic - pos.premium_paid_per_bu : null;
-  // Phase 2: net = cash_sale_price + call_intrinsic - premium
-  // Phase 1: net = futures (proxy for cash) + put_intrinsic - premium
-  const cashBase = isPhase1 ? futuresClose : (pos.cash_sale_price ?? futuresClose);
-  const netEffPrice = (cashBase !== null && intrinsic !== null)
-    ? cashBase + intrinsic - pos.premium_paid_per_bu
-    : null;
-  const netEffVsSpot = (netEffPrice !== null && futuresClose !== null)
-    ? netEffPrice - futuresClose
-    : null;
+  // Per-position P&L from the enriched record returned by GET /positions.
+  // The backend computes these with calc_phase1/calc_phase2 using this
+  // position's own cash_sale_price — never a commodity-level aggregate.
+  const positionPnl  = pos.options_pnl_per_bu ?? null;
+  const netEffPrice  = pos.net_effective_price ?? null;
+  const netEffVsSpot = pos.net_effective_vs_spot_per_bu ?? null;
 
   return (
     <div className="bg-[#141920] rounded border border-[#2a3044] p-3 text-sm space-y-2">
