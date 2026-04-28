@@ -155,7 +155,7 @@ async def _run(execute: bool) -> None:
 
     # ── Connect ──────────────────────────────────────────────────────────────
     db = get_db()
-    pg = await asyncpg.connect(settings.timescale.dsn)
+    pg = await asyncpg.connect(settings.db.dsn)
 
     try:
         # ── 1. Create PostgreSQL tables ──────────────────────────────────────
