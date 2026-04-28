@@ -28,7 +28,7 @@ function normalCDF(x: number): number {
  * Approximate CME grain option expiry: last Friday of the month before the
  * contract delivery month (e.g. ZCN26 → last Friday of June 2026).
  */
-function cmeSymbolToExpiry(symbol: string): Date | null {
+export function cmeSymbolToExpiry(symbol: string): Date | null {
   if (symbol.length < 4) return null;
   const monthCode = symbol[symbol.length - 3];
   const year = 2000 + parseInt(symbol.slice(-2), 10);

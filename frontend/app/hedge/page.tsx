@@ -6,7 +6,7 @@ import {
   getNetPrices,
 } from "@/lib/api";
 import { cmeSymbolToLabel } from "@/lib/cme";
-import { calcLiveDelta, calcHedgeCoverage } from "@/lib/blackScholes";
+import { calcLiveDelta, calcHedgeCoverage, cmeSymbolToExpiry } from "@/lib/blackScholes";
 import type { FuturesPrice, NetPriceResponse, Position, OhlcBar, CashPrice } from "@/lib/types";
 import PriceChart from "@/components/charts/PriceChart";
 import ScenarioModeler from "@/components/trading/ScenarioModeler";
@@ -351,6 +351,16 @@ function PositionRow({
   const netEffPrice  = pos.net_effective_price ?? null;
   const netEffVsSpot = pos.net_effective_vs_spot_per_bu ?? null;
 
+  // Timing metadata
+  const now       = Date.now();
+  const entryMs   = new Date(pos.date_opened).getTime();
+  const daysHeld  = Math.floor((now - entryMs) / 86_400_000);
+  const entryLabel = new Date(pos.date_opened).toLocaleDateString("en-US", {
+    month: "short", day: "numeric", year: "numeric", timeZone: "UTC",
+  });
+  const expiry      = cmeSymbolToExpiry(pos.contract_month);
+  const daysToExpiry = expiry ? Math.ceil((expiry.getTime() - now) / 86_400_000) : null;
+
   return (
     <div className="bg-[#141920] rounded border border-[#2a3044] p-3 text-sm space-y-2">
       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -398,6 +408,16 @@ function PositionRow({
       {pos.notes && (
         <p className="text-xs text-[#7b8aab] italic">{pos.notes}</p>
       )}
+
+      <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-[#4a5568] pt-1 border-t border-[#1e2535]">
+        <span>Entered {entryLabel}</span>
+        <span>{daysHeld} days held</span>
+        {daysToExpiry !== null && (
+          <span className={daysToExpiry <= 14 ? "text-[#f59e0b]" : ""}>
+            {daysToExpiry > 0 ? `${daysToExpiry} days to expiry` : "Expired"}
+          </span>
+        )}
+      </div>
 
       <PositionActions pos={pos} />
     </div>
