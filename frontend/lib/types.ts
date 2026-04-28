@@ -246,6 +246,73 @@ export interface PlantingDate {
   notes: string | null;
 }
 
+// ── Cash sales ────────────────────────────────────────────────────────────────
+
+export interface CashSale {
+  id: string;
+  sale_date: string;
+  commodity: Commodity;
+  bushels: number;
+  cash_price_per_bu: number;
+  gross_amount: number;
+  adjustments: number;
+  net_amount: number;
+  delivery_location: string | null;
+  selling_entity: string | null;
+  trucking_per_bu: number | null;
+  trucking_total: number | null;
+  contract_settlement_id: string | null;
+  notes: string;
+  created_at: string;
+  migrated: boolean;
+}
+
+export interface CashSaleUpdate {
+  sale_date?: string;
+  bushels?: number;
+  cash_price_per_bu?: number;
+  adjustments?: number;
+  delivery_location?: string | null;
+  selling_entity?: string | null;
+  trucking_per_bu?: number | null;
+  trucking_total?: number | null;
+  contract_settlement_id?: string | null;
+  notes?: string;
+}
+
+export interface TaxPositionRow {
+  id: string;
+  commodity: string;
+  contract_month: string;
+  position_type: string;
+  strike: number;
+  premium_paid_per_bu: number;
+  expected_bushels: number;
+  date_opened: string;
+  tax_treatment: string;
+  status: string;
+  exit_date: string | null;
+  exit_price_per_bu: number | null;
+  realized_pnl_per_bu: number | null;
+  realized_pnl_total: number | null;
+  options_pnl_per_bu: number | null;
+  options_pnl_total: number | null;
+  hedge_documentation: string | null;
+  hedge_identification_date: string | null;
+  irc_1221_acknowledgment: boolean | null;
+}
+
+export interface TaxSummary {
+  tax_year: number;
+  hedge_realized_total: number;
+  speculative_realized_total: number;
+  speculative_mtm_total: number;
+  speculative_section_1256_total: number;
+  ltcg_60pct: number;
+  stcg_40pct: number;
+  positions: TaxPositionRow[];
+}
+
 // ── Analytics ─────────────────────────────────────────────────────────────────
 
 export interface BasisBar {

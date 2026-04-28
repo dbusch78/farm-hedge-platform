@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.routers import analytics as analytics_router
 from backend.routers import hedge as hedge_router
+from backend.routers import tax as tax_router
 from backend.routers import weather as weather_router
 from backend.websocket import on_new_price
 from backend.websocket import router as ws_router
@@ -46,6 +47,7 @@ app.add_middleware(
 app.include_router(hedge_router.router)
 app.include_router(analytics_router.router)
 app.include_router(weather_router.router)
+app.include_router(tax_router.router)
 app.include_router(ws_router)
 
 

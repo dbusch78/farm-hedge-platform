@@ -1,6 +1,8 @@
 import type {
   BasisBar,
   CashPrice,
+  CashSale,
+  CashSaleUpdate,
   CloseRequest,
   ExpireRequest,
   FuturesPrice,
@@ -15,6 +17,7 @@ import type {
   RainTotals,
   ScenarioRequest,
   ScenarioRow,
+  TaxSummary,
   TradingModeResponse,
   AgentRun,
   WeatherLocal,
@@ -233,6 +236,32 @@ export async function getGduStatus(): Promise<GduStatus> {
 
 export async function getRainTotals(): Promise<RainTotals> {
   return request<RainTotals>("/api/weather/local/rain-totals");
+}
+
+// ── Cash sales ────────────────────────────────────────────────────────────────
+
+export async function getCashSales(commodity?: string): Promise<CashSale[]> {
+  const qs = commodity ? `?commodity=${encodeURIComponent(commodity)}` : "";
+  return request<CashSale[]>(`/api/tax/cash-sales${qs}`);
+}
+
+export async function getCashSale(id: string): Promise<CashSale> {
+  return request<CashSale>(`/api/tax/cash-sales/${id}`);
+}
+
+export async function updateCashSale(
+  id: string,
+  body: CashSaleUpdate,
+): Promise<CashSale> {
+  return request<CashSale>(`/api/tax/cash-sales/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function getTaxSummary(year?: number): Promise<TaxSummary> {
+  const qs = year ? `?year=${year}` : "";
+  return request<TaxSummary>(`/api/tax/summary${qs}`);
 }
 
 // ── Planting dates ────────────────────────────────────────────────────────────

@@ -11,6 +11,7 @@ const LINKS = [
   { href: "/journal", label: "Journal" },
   { href: "/weather", label: "Weather" },
   { href: "/portfolio", label: "Portfolio" },
+  { href: "/tax", label: "Tax" },
 ];
 
 export default function MobileNav() {

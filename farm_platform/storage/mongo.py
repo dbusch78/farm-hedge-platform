@@ -19,6 +19,7 @@ _db: AsyncIOMotorDatabase | None = None  # type: ignore[type-arg]
 # Collection names that must exist; created on init.
 COLLECTIONS = [
     "positions",
+    "cash_sales",
     "usda_releases",
     "agent_runs",
     "news_articles",
@@ -51,6 +52,7 @@ async def ensure_collections() -> None:
 
     # Indexes
     await db.positions.create_index([("commodity", 1), ("phase", 1)])
+    await db.cash_sales.create_index([("commodity", 1), ("sale_date", -1)])
     await db.agent_runs.create_index([("agent", 1), ("run_timestamp", -1)])
     await db.trading_mode_audit.create_index([("timestamp", -1)])
     await db.news_articles.create_index([("published_at", -1)])
@@ -132,6 +134,41 @@ async def update_position(position_id: str, updates: dict[str, Any]) -> None:
     updates["updated_at"] = _now()
     await db.positions.update_one(
         {"_id": ObjectId(position_id)},
+        {"$set": updates},
+    )
+
+
+# ── cash_sales ───────────────────────────────────────────────────────────────
+
+async def list_cash_sales(
+    commodity: str | None = None,
+) -> list[dict[str, Any]]:
+    db = get_db()
+    filt: dict[str, Any] = {}
+    if commodity:
+        filt["commodity"] = commodity
+    cursor = db.cash_sales.find(filt).sort("sale_date", -1)
+    return [_serialize(d) async for d in cursor]
+
+
+async def get_cash_sale(sale_id: str) -> dict[str, Any] | None:
+    db = get_db()
+    doc = await db.cash_sales.find_one({"_id": ObjectId(sale_id)})
+    return _serialize(doc)
+
+
+async def create_cash_sale(doc: dict[str, Any]) -> str:
+    db = get_db()
+    doc.setdefault("created_at", _now())
+    result = await db.cash_sales.insert_one(doc)
+    return str(result.inserted_id)
+
+
+async def update_cash_sale(sale_id: str, updates: dict[str, Any]) -> None:
+    db = get_db()
+    updates["updated_at"] = _now()
+    await db.cash_sales.update_one(
+        {"_id": ObjectId(sale_id)},
         {"$set": updates},
     )
 

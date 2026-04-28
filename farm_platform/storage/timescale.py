@@ -379,3 +379,64 @@ async def insert_options_snapshot(
         time, position_id, underlying_px, option_px, delta,
         premium_paid, pnl_per_bushel, net_eff_price,
     )
+
+
+# ── Append-only audit logs ────────────────────────────────────────────────────
+
+async def insert_position_audit(
+    *,
+    position_id: str,
+    action: str,
+    field_changed: str | None = None,
+    before_value: str | None = None,   # JSON string
+    after_value: str | None = None,    # JSON string
+    reason: str | None = None,
+    user_id: str = "dennis",
+    migrated: bool = False,
+) -> None:
+    await execute(
+        """
+        INSERT INTO position_audit_log
+            (position_id, action, field_changed, before_value,
+             after_value, reason, user_id, migrated)
+        VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8)
+        """,
+        position_id, action, field_changed,
+        before_value, after_value, reason, user_id, migrated,
+    )
+
+
+async def get_position_audit_log(position_id: str) -> list[asyncpg.Record]:
+    return await fetch(
+        """
+        SELECT id::text, position_id, timestamp, action, field_changed,
+               before_value, after_value, reason, user_id, migrated
+        FROM position_audit_log
+        WHERE position_id = $1
+        ORDER BY timestamp ASC
+        """,
+        position_id,
+    )
+
+
+async def insert_cash_sale_audit(
+    *,
+    cash_sale_id: str,
+    action: str,
+    field_changed: str | None = None,
+    before_value: str | None = None,
+    after_value: str | None = None,
+    reason: str | None = None,
+    user_id: str = "dennis",
+    migrated: bool = False,
+) -> None:
+    await execute(
+        """
+        INSERT INTO cash_sale_audit_log
+            (cash_sale_id, action, field_changed, before_value,
+             after_value, reason, user_id, migrated)
+        VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8)
+        """,
+        cash_sale_id, action, field_changed,
+        before_value, after_value, reason, user_id, migrated,
+    )

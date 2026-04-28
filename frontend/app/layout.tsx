@@ -30,6 +30,7 @@ export default function RootLayout({
                 <a href="/journal" className="hover:text-[#e8edf5] transition-colors">Journal</a>
                 <a href="/weather" className="hover:text-[#e8edf5] transition-colors">Weather</a>
                 <a href="/portfolio" className="hover:text-[#e8edf5] transition-colors">Portfolio</a>
+                <a href="/tax" className="hover:text-[#e8edf5] transition-colors">Tax</a>
               </div>
             </div>
             <div className="flex items-center gap-2 text-xs text-[#7b8aab]">
