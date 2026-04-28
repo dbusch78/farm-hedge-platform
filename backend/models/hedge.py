@@ -2,16 +2,28 @@
 
 from __future__ import annotations
 
+import re
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+_CME_CONTRACT_RE = re.compile(r"^Z[CS][FGHJKMNQUVXZ]\d{2}$")
 
 
 # ── Request bodies ────────────────────────────────────────────────────────────
 
 class PositionCreate(BaseModel):
     commodity: Literal["ZC", "ZS"]
-    contract_month: str = Field(examples=["Jul25"])
+    contract_month: str = Field(examples=["ZCN26", "ZSN26"])
+
+    @field_validator("contract_month")
+    @classmethod
+    def validate_contract_month(cls, v: str) -> str:
+        if not _CME_CONTRACT_RE.match(v):
+            raise ValueError(
+                f"contract_month must be a CME symbol like ZCN26 or ZSN26, got {v!r}"
+            )
+        return v
     position_type: Literal["put", "call"]
     strike: float
     premium_paid_per_bu: float
@@ -79,6 +91,8 @@ class NetPriceResponse(BaseModel):
     net_effective_price: float
     put_intrinsic: float
     call_intrinsic: float
+    options_pnl_per_bu: float            # intrinsic minus premium for this position
+    net_effective_vs_spot_per_bu: float  # net_effective_price minus current futures
     total_premiums_paid: float
     raw_contracts: float
     delta_adj_contracts: float

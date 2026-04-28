@@ -88,6 +88,8 @@ async def get_net_prices() -> list[dict[str, Any]]:
                 expected_bushels=pos["expected_bushels"],
                 delta_at_entry=pos["delta_at_entry"],
             )
+            put_pnl = round(result.put_intrinsic_value - result.total_premiums_paid, 4)
+            vs_spot = round(result.net_effective_price - underlying, 4)
             results.append({
                 "commodity": pos["commodity"],
                 "phase": 1,
@@ -95,6 +97,8 @@ async def get_net_prices() -> list[dict[str, Any]]:
                 "net_effective_price": result.net_effective_price,
                 "put_intrinsic": result.put_intrinsic_value,
                 "call_intrinsic": 0.0,
+                "options_pnl_per_bu": put_pnl,
+                "net_effective_vs_spot_per_bu": vs_spot,
                 "total_premiums_paid": result.total_premiums_paid,
                 "raw_contracts": result.raw_contracts,
                 "delta_adj_contracts": result.delta_adj_contracts,
@@ -110,6 +114,7 @@ async def get_net_prices() -> list[dict[str, Any]]:
                 expected_bushels=pos["expected_bushels"],
                 delta_at_entry=pos["delta_at_entry"],
             )
+            vs_spot2 = round(result2.net_effective_price - underlying, 4)
             results.append({
                 "commodity": pos["commodity"],
                 "phase": 2,
@@ -117,6 +122,8 @@ async def get_net_prices() -> list[dict[str, Any]]:
                 "net_effective_price": result2.net_effective_price,
                 "put_intrinsic": 0.0,
                 "call_intrinsic": max(underlying - pos["strike"], 0.0),
+                "options_pnl_per_bu": result2.call_pnl,
+                "net_effective_vs_spot_per_bu": vs_spot2,
                 "total_premiums_paid": result2.total_premiums_paid,
                 "raw_contracts": result2.raw_contracts,
                 "delta_adj_contracts": result2.delta_adj_contracts,

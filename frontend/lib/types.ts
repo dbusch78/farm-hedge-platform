@@ -61,6 +61,8 @@ export interface NetPriceResponse {
   net_effective_price: number;
   put_intrinsic: number;
   call_intrinsic: number;
+  options_pnl_per_bu: number;           // intrinsic minus premium for this position
+  net_effective_vs_spot_per_bu: number; // net_effective_price minus current futures
   total_premiums_paid: number;
   raw_contracts: number;
   delta_adj_contracts: number;

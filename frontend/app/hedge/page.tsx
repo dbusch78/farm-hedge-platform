@@ -5,6 +5,7 @@ import {
   getPositions,
   getNetPrices,
 } from "@/lib/api";
+import { cmeSymbolToLabel } from "@/lib/cme";
 import type { FuturesPrice, NetPriceResponse, Position, OhlcBar, CashPrice } from "@/lib/types";
 import PriceChart from "@/components/charts/PriceChart";
 import ScenarioModeler from "@/components/trading/ScenarioModeler";
@@ -72,7 +73,7 @@ export default async function HedgePage() {
       {/* ── Corn section ─────────────────────────────────────────────────── */}
       <CommoditySection
         commodity="ZC"
-        label="Corn — July ZC"
+        label={`Corn${zcPositions[0]?.contract_month ? ` — ${cmeSymbolToLabel(zcPositions[0].contract_month)}` : ""}`}
         icon="🌽"
         positions={zcPositions}
         netPrice={zcNet}
@@ -85,7 +86,7 @@ export default async function HedgePage() {
       {/* ── Soybeans section ─────────────────────────────────────────────── */}
       <CommoditySection
         commodity="ZS"
-        label="Soybeans — July ZS"
+        label={`Soybeans${zsPositions[0]?.contract_month ? ` — ${cmeSymbolToLabel(zsPositions[0].contract_month)}` : ""}`}
         icon="🌱"
         positions={zsPositions}
         netPrice={zsNet}
@@ -202,9 +203,8 @@ function PositionRow({
   const rawContracts = pos.expected_bushels / 5000;
   const deltaAdj = rawContracts / pos.delta_at_entry;
 
-  const pnl = netPrice && futuresClose !== null
-    ? netPrice.net_effective_price - futuresClose
-    : null;
+  // Options P&L: intrinsic value minus premium paid, per bushel
+  const pnl = netPrice ? netPrice.options_pnl_per_bu : null;
 
   return (
     <div className="bg-[#141920] rounded border border-[#2a3044] p-3 text-sm space-y-2">
@@ -240,6 +240,14 @@ function PositionRow({
             positive={pnl >= 0}
           />
         )}
+        {netPrice && futuresClose !== null && (
+          <Stat
+            label="Net Eff. vs Spot"
+            value={`${netPrice.net_effective_vs_spot_per_bu >= 0 ? "+" : ""}$${fmt(netPrice.net_effective_vs_spot_per_bu)}/bu`}
+            positive={netPrice.net_effective_vs_spot_per_bu >= 0}
+            tooltip="How your locked-in net price compares to current market. Negative means the market rallied after your sale — expected for Phase 2 calls."
+          />
+        )}
         {pos.phase === 2 && pos.cash_sale_price != null && (
           <Stat label="Cash locked" value={`$${fmt(pos.cash_sale_price)}/bu`} />
         )}
@@ -258,16 +266,18 @@ function Stat({
   highlight = false,
   positive,
   muted = false,
+  tooltip,
 }: {
   label: string;
   value: string;
   highlight?: boolean;
   positive?: boolean;
   muted?: boolean;
+  tooltip?: string;
 }) {
   return (
-    <div>
-      <p className="text-[10px] uppercase tracking-widest text-[#7b8aab] mb-0.5">{label}</p>
+    <div title={tooltip}>
+      <p className={`text-[10px] uppercase tracking-widest text-[#7b8aab] mb-0.5 ${tooltip ? "cursor-help" : ""}`}>{label}</p>
       <p
         className={`tabular-nums font-medium ${
           highlight

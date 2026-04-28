@@ -3,7 +3,7 @@
 A position document looks like:
 {
     "commodity":   "ZC" | "ZS",
-    "contract_month": "Jul25",
+    "contract_month": "ZCN26",
     "position_type": "put" | "call",
     "strike":       4.20,
     "premium_paid_per_bu": 0.14,

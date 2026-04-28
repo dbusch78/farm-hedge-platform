@@ -1,6 +1,7 @@
 "use client";
 
 import { useFuturesPrices } from "@/hooks/useFuturesPrices";
+import { cmeSymbolToLabel } from "@/lib/cme";
 import type { FuturesPrice, NetPriceResponse, Position } from "@/lib/types";
 
 interface Props {
@@ -61,12 +62,11 @@ export default function HedgeCard({
   const contractMonth = positions[0]?.contract_month ?? "—";
   const positionType = positions[0]?.position_type ?? "put";
 
-  // P&L calculation from net price data
-  const pnlPerBu =
-    netPrice && futuresClose !== null
-      ? netPrice.net_effective_price - futuresClose
-      : null;
+  // Options P&L: intrinsic value minus premium paid, per bushel
+  const pnlPerBu = netPrice ? netPrice.options_pnl_per_bu : null;
   const totalPnl = pnlPerBu !== null ? pnlPerBu * totalBushels : null;
+  // Net effective vs spot: locked price advantage/disadvantage vs live market
+  const vsSpot = netPrice ? netPrice.net_effective_vs_spot_per_bu : null;
 
   const isPhase1 = phase === 1;
   const borderColor = isPhase1 ? "border-l-[#a3e635]" : "border-l-[#3b82f6]";
@@ -81,10 +81,10 @@ export default function HedgeCard({
         <div>
           <h2 className="text-base font-semibold text-[#e8edf5] flex items-center gap-2">
             <span>{COMMODITY_ICON[commodity]}</span>
-            {COMMODITY_LABEL[commodity]} HEDGE &mdash; {contractMonth}
+            {COMMODITY_LABEL[commodity]} HEDGE &mdash; {cmeSymbolToLabel(contractMonth)}
           </h2>
           <p className="text-xs text-[#7b8aab] mt-0.5">
-            {commodity === "ZC" ? "July ZC" : "July ZS"} &bull;{" "}
+            {commodity}=F &bull;{" "}
             {positionType === "put" ? "Long puts" : "Long calls"}
           </p>
         </div>
@@ -125,34 +125,54 @@ export default function HedgeCard({
         />
       </div>
 
-      {/* P&L row */}
-      <div className="pt-1 border-t border-[#1e2535] flex items-center justify-between">
-        <span className="text-xs text-[#7b8aab] uppercase tracking-wide">
-          Options P&amp;L (net of premium)
-        </span>
-        <span
-          className={`text-sm font-semibold tabular-nums ${
-            pnlPerBu === null
-              ? "text-[#7b8aab]"
-              : pnlPerBu >= 0
-                ? "text-[#22c55e]"
-                : "text-[#ef4444]"
-          }`}
-        >
-          {pnlPerBu !== null ? (
-            <>
-              {pnlPerBu >= 0 ? "+" : ""}
-              {fmt(pnlPerBu)}/bu
-              {totalPnl !== null && (
-                <span className="text-xs ml-2 opacity-70">
-                  ({fmtDollars(totalPnl)})
-                </span>
-              )}
-            </>
-          ) : (
-            "—"
-          )}
-        </span>
+      {/* P&L rows */}
+      <div className="pt-1 border-t border-[#1e2535] space-y-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-[#7b8aab] uppercase tracking-wide">
+            Options P&amp;L (net of premium)
+          </span>
+          <span
+            className={`text-sm font-semibold tabular-nums ${
+              pnlPerBu === null
+                ? "text-[#7b8aab]"
+                : pnlPerBu >= 0
+                  ? "text-[#22c55e]"
+                  : "text-[#ef4444]"
+            }`}
+          >
+            {pnlPerBu !== null ? (
+              <>
+                {pnlPerBu >= 0 ? "+" : ""}
+                {fmt(pnlPerBu)}/bu
+                {totalPnl !== null && (
+                  <span className="text-xs ml-2 opacity-70">
+                    ({fmtDollars(totalPnl)})
+                  </span>
+                )}
+              </>
+            ) : (
+              "—"
+            )}
+          </span>
+        </div>
+        {vsSpot !== null && (
+          <div className="flex items-center justify-between">
+            <span
+              className="text-xs text-[#7b8aab] uppercase tracking-wide cursor-help"
+              title="How your locked-in net price compares to current market. Negative means the market rallied after your sale — this is expected when running Phase 2 calls to capture upside."
+            >
+              Net Effective vs Spot
+            </span>
+            <span
+              className={`text-xs font-semibold tabular-nums ${
+                vsSpot >= 0 ? "text-[#22c55e]" : "text-[#f59e0b]"
+              }`}
+            >
+              {vsSpot >= 0 ? "+" : ""}
+              {fmt(vsSpot)}/bu
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Premium cost line */}

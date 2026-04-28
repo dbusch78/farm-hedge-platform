@@ -32,7 +32,7 @@ log = structlog.get_logger()
 #
 # Field reference:
 #   commodity          "ZC" (corn) | "ZS" (soybeans)
-#   contract_month     e.g. "Jul25"
+#   contract_month     CME symbol, e.g. "ZCN26" or "ZSN26"
 #   position_type      "put" | "call"
 #   strike             strike price (dollars/bushel)
 #   premium_paid_per_bu  premium paid at entry (dollars/bushel)
@@ -53,7 +53,7 @@ POSITIONS: list[dict] = [
     # Uncomment and edit to reflect your actual position.
     # {
     #     "commodity": "ZC",
-    #     "contract_month": "Jul25",
+    #     "contract_month": "ZCN26",
     #     "position_type": "put",
     #     "strike": 4.20,
     #     "premium_paid_per_bu": 0.14,
@@ -67,7 +67,7 @@ POSITIONS: list[dict] = [
     # ── Example: Phase 2 soybean call ────────────────────────────────────────
     # {
     #     "commodity": "ZS",
-    #     "contract_month": "Jul25",
+    #     "contract_month": "ZCN26",
     #     "position_type": "call",
     #     "strike": 11.00,
     #     "premium_paid_per_bu": 0.22,

@@ -25,7 +25,7 @@ interface FormState {
 
 const INITIAL: FormState = {
   commodity: "ZC",
-  contract_month: "Jul25",
+  contract_month: "ZCN26",
   position_type: "put",
   strike: "",
   premium_paid_per_bu: "",
@@ -112,7 +112,7 @@ export default function PositionEntry({ onSuccess }: Props) {
             type="text"
             value={form.contract_month}
             onChange={(e) => set("contract_month", e.target.value)}
-            placeholder="Jul25"
+            placeholder="ZCN26"
             required
             className="input-dark"
           />

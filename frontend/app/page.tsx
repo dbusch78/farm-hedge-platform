@@ -115,7 +115,6 @@ function EmptyHedgeCard({
 }) {
   const icons: Record<string, string> = { ZC: "🌽", ZS: "🌱" };
   const labels: Record<string, string> = { ZC: "CORN", ZS: "SOYBEAN" };
-  const symbols: Record<string, string> = { ZC: "July ZC", ZS: "July ZS" };
   const borderColors: Record<string, string> = {
     ZC: "border-l-[#a3e635]",
     ZS: "border-l-[#3b82f6]",
@@ -128,7 +127,7 @@ function EmptyHedgeCard({
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold text-[#e8edf5] flex items-center gap-2">
-            {icons[commodity]} {labels[commodity]} HEDGE &mdash; {symbols[commodity]}
+            {icons[commodity]} {labels[commodity]} HEDGE
           </h2>
           <p className="text-sm text-[#4a5568] mt-1 italic">No active positions</p>
         </div>
