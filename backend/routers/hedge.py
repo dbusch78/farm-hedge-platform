@@ -8,10 +8,14 @@ import structlog
 from fastapi import APIRouter, HTTPException
 
 from backend.models.hedge import (
+    AuditEntry,
     CashPriceResponse,
+    CloseRequest,
+    ExpireRequest,
     FuturesPriceResponse,
     NetPriceResponse,
     PositionCreate,
+    PositionDetailResponse,
     PositionResponse,
     PositionUpdate,
     ScenarioRequest,
@@ -21,10 +25,12 @@ from farm_platform.hedge.calculator import calc_phase1, calc_phase2
 from farm_platform.hedge.scenario_model import run_phase1_scenarios, run_phase2_scenarios
 from farm_platform.hedge.tracker import (
     add_position,
-    close_position,
+    close_position_with_pnl,
+    expire_position,
     get_all_positions,
     get_position_by_id,
     patch_position,
+    soft_delete_position,
 )
 from farm_platform.storage.timescale import get_futures_history, get_latest_cash, get_latest_futures
 
@@ -35,8 +41,16 @@ router = APIRouter(prefix="/api/hedge", tags=["hedge"])
 # ── Positions ─────────────────────────────────────────────────────────────────
 
 @router.get("/positions", response_model=list[PositionResponse])
-async def list_positions(active_only: bool = True) -> list[dict[str, Any]]:
-    return await get_all_positions(active_only=active_only)
+async def list_positions(
+    status: str = "active",
+    active_only: bool | None = None,   # legacy param — remove after frontend updated
+) -> list[dict[str, Any]]:
+    # Legacy callers still send active_only=true/false
+    if active_only is not None and status == "active":
+        resolved = "active" if active_only else "all"
+    else:
+        resolved = status
+    return await get_all_positions(status=resolved)
 
 
 @router.post("/positions", response_model=dict[str, str], status_code=201)
@@ -48,11 +62,12 @@ async def create_position(body: PositionCreate) -> dict[str, str]:
     return {"id": position_id}
 
 
-@router.get("/positions/{position_id}", response_model=PositionResponse)
+@router.get("/positions/{position_id}", response_model=PositionDetailResponse)
 async def get_position(position_id: str) -> dict[str, Any]:
     pos = await get_position_by_id(position_id)
     if pos is None:
         raise HTTPException(status_code=404, detail="Position not found")
+    pos.setdefault("audit_log", [])
     return pos
 
 
@@ -62,6 +77,59 @@ async def update_position(position_id: str, body: PositionUpdate) -> dict[str, s
     if not updates:
         raise HTTPException(status_code=422, detail="No fields to update")
     await patch_position(position_id, updates)
+    return {"id": position_id}
+
+
+@router.post("/positions/{position_id}/close", response_model=dict[str, str])
+async def close_position_endpoint(
+    position_id: str, body: CloseRequest
+) -> dict[str, str]:
+    pos = await get_position_by_id(position_id)
+    if pos is None:
+        raise HTTPException(status_code=404, detail="Position not found")
+    if pos.get("status", "ACTIVE") != "ACTIVE":
+        raise HTTPException(status_code=422, detail="Position is not ACTIVE")
+    try:
+        await close_position_with_pnl(
+            position_id,
+            exit_price_per_bu=body.exit_price_per_bu,
+            exit_date=body.exit_date,
+            notes=body.notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"id": position_id}
+
+
+@router.post("/positions/{position_id}/expire", response_model=dict[str, str])
+async def expire_position_endpoint(
+    position_id: str, body: ExpireRequest
+) -> dict[str, str]:
+    pos = await get_position_by_id(position_id)
+    if pos is None:
+        raise HTTPException(status_code=404, detail="Position not found")
+    if pos.get("status", "ACTIVE") != "ACTIVE":
+        raise HTTPException(status_code=422, detail="Position is not ACTIVE")
+    try:
+        await expire_position(
+            position_id,
+            exit_price_per_bu=body.exit_price_per_bu,
+            exit_date=body.exit_date,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"id": position_id}
+
+
+@router.delete("/positions/{position_id}", response_model=dict[str, str])
+async def delete_position_endpoint(position_id: str) -> dict[str, str]:
+    pos = await get_position_by_id(position_id)
+    if pos is None:
+        raise HTTPException(status_code=404, detail="Position not found")
+    try:
+        await soft_delete_position(position_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"id": position_id}
 
 
@@ -81,7 +149,7 @@ async def get_net_prices() -> list[dict[str, Any]]:
 
         if pos["phase"] == 1:
             result = calc_phase1(
-                current_cash_price=underlying,   # approximate with futures until cash feed is live
+                current_cash_price=underlying,
                 underlying_price=underlying,
                 strike=pos["strike"],
                 total_premiums_paid_per_bu=pos["premium_paid_per_bu"],

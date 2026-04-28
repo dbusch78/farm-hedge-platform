@@ -7,6 +7,8 @@ export type TradingMode = "paper" | "live";
 
 // ── Hedge positions ───────────────────────────────────────────────────────────
 
+export type PositionStatus = "ACTIVE" | "CLOSED" | "EXPIRED" | "DELETED";
+
 export interface Position {
   id: string;
   commodity: Commodity;
@@ -20,8 +22,11 @@ export interface Position {
   phase: Phase;
   date_opened: string;
   cash_sale_price: number | null;
-  closed: boolean;
-  date_closed: string | null;
+  status: PositionStatus;
+  exit_price_per_bu: number | null;
+  exit_date: string | null;
+  exit_reason: string | null;
+  realized_pnl_per_bu: number | null;
   notes: string;
 }
 
@@ -48,8 +53,17 @@ export interface PositionUpdate {
   phase?: Phase;
   cash_sale_price?: number | null;
   notes?: string;
-  closed?: boolean;
-  date_closed?: string | null;
+}
+
+export interface CloseRequest {
+  exit_price_per_bu: number;
+  exit_date?: string;
+  notes?: string;
+}
+
+export interface ExpireRequest {
+  exit_price_per_bu?: number;
+  exit_date?: string;
 }
 
 // ── Net effective price ───────────────────────────────────────────────────────

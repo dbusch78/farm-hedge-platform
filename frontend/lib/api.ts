@@ -1,6 +1,8 @@
 import type {
   BasisBar,
   CashPrice,
+  CloseRequest,
+  ExpireRequest,
   FuturesPrice,
   GduStatus,
   NepBar,
@@ -69,9 +71,11 @@ export async function getFuturesHistory(
 
 // ── Hedge positions ───────────────────────────────────────────────────────────
 
-export async function getPositions(activeOnly = true): Promise<Position[]> {
+export async function getPositions(
+  status: "active" | "closed" | "all" = "active",
+): Promise<Position[]> {
   return request<Position[]>(
-    `/api/hedge/positions?active_only=${activeOnly}`,
+    `/api/hedge/positions?status=${status}`,
     undefined,
     ["positions"],
   );
@@ -96,6 +100,30 @@ export async function updatePosition(
     method: "PUT",
     body: JSON.stringify(body),
   });
+}
+
+export async function closePosition(
+  id: string,
+  body: CloseRequest,
+): Promise<{ id: string }> {
+  return request<{ id: string }>(`/api/hedge/positions/${id}/close`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function expirePosition(
+  id: string,
+  body: ExpireRequest,
+): Promise<{ id: string }> {
+  return request<{ id: string }>(`/api/hedge/positions/${id}/expire`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deletePosition(id: string): Promise<void> {
+  await request<void>(`/api/hedge/positions/${id}`, { method: "DELETE" });
 }
 
 // Returns all net prices; filter by commodity client-side.

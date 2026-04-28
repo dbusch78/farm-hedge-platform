@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -37,6 +37,8 @@ class PositionCreate(BaseModel):
 
 
 class PositionUpdate(BaseModel):
+    """Editable fields only. Immutable after creation: commodity, contract_month,
+    position_type, date_opened. Use /close or /expire for lifecycle transitions."""
     strike: float | None = None
     premium_paid_per_bu: float | None = None
     num_contracts: int | None = None
@@ -44,8 +46,17 @@ class PositionUpdate(BaseModel):
     phase: Literal[1, 2] | None = None
     cash_sale_price: float | None = None
     notes: str | None = None
-    closed: bool | None = None
-    date_closed: str | None = None
+
+
+class CloseRequest(BaseModel):
+    exit_price_per_bu: float
+    exit_date: str | None = None   # defaults to now() server-side if omitted
+    notes: str = ""
+
+
+class ExpireRequest(BaseModel):
+    exit_price_per_bu: float = 0.0   # 0.00 = expired worthless
+    exit_date: str | None = None
 
 
 class ScenarioRequest(BaseModel):
@@ -78,10 +89,25 @@ class PositionResponse(BaseModel):
     expected_bushels: int
     phase: int
     date_opened: str
-    cash_sale_price: float | None
-    closed: bool
-    date_closed: str | None
-    notes: str
+    cash_sale_price: float | None = None
+    # Lifecycle
+    status: str = "ACTIVE"
+    exit_price_per_bu: float | None = None
+    exit_date: str | None = None
+    exit_reason: str | None = None
+    realized_pnl_per_bu: float | None = None
+    notes: str = ""
+
+
+class AuditEntry(BaseModel):
+    timestamp: str
+    action: str
+    changes: dict[str, Any] = {}
+
+
+class PositionDetailResponse(PositionResponse):
+    """Full position including audit log — returned by GET /positions/{id}."""
+    audit_log: list[AuditEntry] = []
 
 
 class NetPriceResponse(BaseModel):

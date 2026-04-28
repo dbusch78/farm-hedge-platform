@@ -11,6 +11,7 @@ import type { FuturesPrice, NetPriceResponse, Position, OhlcBar, CashPrice } fro
 import PriceChart from "@/components/charts/PriceChart";
 import ScenarioModeler from "@/components/trading/ScenarioModeler";
 import PositionEntry from "@/components/trading/PositionEntry";
+import PositionActions from "@/components/trading/PositionActions";
 
 export const dynamic = "force-dynamic";
 
@@ -27,9 +28,10 @@ function fmt(n: number, d = 2) {
 }
 
 export default async function HedgePage() {
-  const [positions, futuresPrices, netPrices, zcHistory, zsHistory, cashPrices] =
+  const [positions, closedPositionsData, futuresPrices, netPrices, zcHistory, zsHistory, cashPrices] =
     await Promise.all([
-      safeFetch(() => getPositions()),
+      safeFetch(() => getPositions("active")),
+      safeFetch(() => getPositions("closed")),
       safeFetch(() => getFuturesPrices()),
       safeFetch(() => getNetPrices()),
       safeFetch(() => getFuturesHistory("ZC=F", 120)),
@@ -38,11 +40,14 @@ export default async function HedgePage() {
     ]);
 
   const allPositions: Position[] = positions ?? [];
+  const closedPositions: Position[] = closedPositionsData ?? [];
   const prices: FuturesPrice[] = futuresPrices ?? [];
   const netPriceList: NetPriceResponse[] = netPrices ?? [];
 
   const zcPositions = allPositions.filter((p) => p.commodity === "ZC");
   const zsPositions = allPositions.filter((p) => p.commodity === "ZS");
+  const zcClosed = closedPositions.filter((p) => p.commodity === "ZC");
+  const zsClosed = closedPositions.filter((p) => p.commodity === "ZS");
 
   const findPrice = (sym: string) => prices.find((p) => p.symbol === sym) ?? null;
   const findNetPrice = (c: string) => netPriceList.find((r) => r.commodity === c) ?? null;
@@ -55,6 +60,9 @@ export default async function HedgePage() {
   const zcCash = (cashPrices ?? []).filter((c) => c.commodity === "ZC");
   const zsCash = (cashPrices ?? []).filter((c) => c.commodity === "ZS");
 
+  const contractLabel = (positions: Position[]) =>
+    positions[0]?.contract_month ? ` — ${cmeSymbolToLabel(positions[0].contract_month)}` : "";
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -64,7 +72,7 @@ export default async function HedgePage() {
         </a>
       </div>
 
-      {allPositions.length === 0 && (
+      {allPositions.length === 0 && closedPositions.length === 0 && (
         <div className="bg-[#f59e0b10] border border-[#f59e0b40] rounded-lg px-4 py-3 text-xs text-[#f59e0b]">
           No active positions. Add one below, or run{" "}
           <code className="text-[#7b8aab]">python -m scripts.seed_positions</code>.
@@ -74,9 +82,10 @@ export default async function HedgePage() {
       {/* ── Corn section ─────────────────────────────────────────────────── */}
       <CommoditySection
         commodity="ZC"
-        label={`Corn${zcPositions[0]?.contract_month ? ` — ${cmeSymbolToLabel(zcPositions[0].contract_month)}` : ""}`}
+        label={`Corn${contractLabel(zcPositions.length ? zcPositions : zcClosed)}`}
         icon="🌽"
         positions={zcPositions}
+        closedPositions={zcClosed}
         netPrice={zcNet}
         currentPrice={zcPrice}
         history={zcHistory ?? []}
@@ -87,9 +96,10 @@ export default async function HedgePage() {
       {/* ── Soybeans section ─────────────────────────────────────────────── */}
       <CommoditySection
         commodity="ZS"
-        label={`Soybeans${zsPositions[0]?.contract_month ? ` — ${cmeSymbolToLabel(zsPositions[0].contract_month)}` : ""}`}
+        label={`Soybeans${contractLabel(zsPositions.length ? zsPositions : zsClosed)}`}
         icon="🌱"
         positions={zsPositions}
+        closedPositions={zsClosed}
         netPrice={zsNet}
         currentPrice={zsPrice}
         history={zsHistory ?? []}
@@ -105,11 +115,74 @@ export default async function HedgePage() {
   );
 }
 
+function SeasonSummary({
+  activePositions,
+  closedPositions,
+  netPrice,
+}: {
+  activePositions: Position[];
+  closedPositions: Position[];
+  netPrice: NetPriceResponse | null;
+}) {
+  if (closedPositions.length === 0) return null;
+
+  const activeBushels = activePositions.reduce((s, p) => s + p.expected_bushels, 0);
+  const closedBushels = closedPositions.reduce((s, p) => s + p.expected_bushels, 0);
+
+  const realizedTotal = closedPositions.reduce(
+    (sum, p) => sum + (p.realized_pnl_per_bu ?? 0) * p.expected_bushels,
+    0,
+  );
+
+  const activeMtmTotal =
+    netPrice && activeBushels > 0
+      ? netPrice.options_pnl_per_bu * activeBushels
+      : null;
+
+  const combinedTotal =
+    activeMtmTotal !== null ? activeMtmTotal + realizedTotal : null;
+
+  function fmtDollars(n: number) {
+    const sign = n >= 0 ? "+" : "";
+    return `${sign}$${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-4 text-xs text-[#7b8aab] pt-1">
+      <span className="uppercase tracking-wide">Season:</span>
+      {activeMtmTotal !== null && (
+        <span>
+          Active MTM{" "}
+          <span className={activeMtmTotal >= 0 ? "text-[#22c55e]" : "text-[#ef4444]"}>
+            {fmtDollars(activeMtmTotal)}
+          </span>
+        </span>
+      )}
+      <span>
+        Realized{" "}
+        <span className={realizedTotal >= 0 ? "text-[#22c55e]" : "text-[#ef4444]"}>
+          {fmtDollars(realizedTotal)}
+        </span>
+        <span className="text-[#4a5568]"> ({closedBushels.toLocaleString()} bu)</span>
+      </span>
+      {combinedTotal !== null && (
+        <span>
+          Combined{" "}
+          <span className={`font-semibold ${combinedTotal >= 0 ? "text-[#22c55e]" : "text-[#ef4444]"}`}>
+            {fmtDollars(combinedTotal)}
+          </span>
+        </span>
+      )}
+    </div>
+  );
+}
+
 function CommoditySection({
   commodity,
   label,
   icon,
   positions,
+  closedPositions,
   netPrice,
   currentPrice,
   history,
@@ -120,6 +193,7 @@ function CommoditySection({
   label: string;
   icon: string;
   positions: Position[];
+  closedPositions: Position[];
   netPrice: NetPriceResponse | null;
   currentPrice: FuturesPrice | null;
   history: OhlcBar[];
@@ -133,9 +207,16 @@ function CommoditySection({
     <section className={`bg-[#1a1f2e] rounded-lg border border-[#2a3044] border-l-4 ${borderColor} p-5 space-y-5`}>
       {/* Header */}
       <div className="flex items-start justify-between">
-        <h2 className="text-base font-semibold text-[#e8edf5]">
-          {icon} {label}
-        </h2>
+        <div className="space-y-1">
+          <h2 className="text-base font-semibold text-[#e8edf5]">
+            {icon} {label}
+          </h2>
+          <SeasonSummary
+            activePositions={positions}
+            closedPositions={closedPositions}
+            netPrice={netPrice}
+          />
+        </div>
         {futuresClose !== null && (
           <div className="text-right">
             <p className="text-[10px] text-[#7b8aab] uppercase tracking-wide mb-0.5">
@@ -158,7 +239,7 @@ function CommoditySection({
         height={300}
       />
 
-      {/* Positions list */}
+      {/* Active positions list */}
       {positions.length > 0 ? (
         <div className="space-y-2">
           <h3 className="text-xs font-semibold text-[#7b8aab] uppercase tracking-wide">
@@ -169,7 +250,19 @@ function CommoditySection({
           ))}
         </div>
       ) : (
-        <p className="text-sm text-[#4a5568] italic">No {commodity} positions yet.</p>
+        <p className="text-sm text-[#4a5568] italic">No active {commodity} positions.</p>
+      )}
+
+      {/* Closed / expired positions */}
+      {closedPositions.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold text-[#7b8aab] uppercase tracking-wide">
+            Closed Positions ({closedPositions.length})
+          </h3>
+          {closedPositions.map((pos) => (
+            <ClosedPositionRow key={pos.id} pos={pos} />
+          ))}
+        </div>
       )}
 
       {/* Scenario modeler */}
@@ -222,7 +315,6 @@ function PositionRow({
     ? `Holding ${pos.num_contracts} of ${fmt(fullHedgeTarget, 1)} contracts for full delta-neutral coverage of ${pos.expected_bushels.toLocaleString()} bu at live Δ=${liveDelta.toFixed(2)}. Partial coverage is intentional — this is floor protection, not a 1:1 hedge.`
     : `Phase 2 calls provide upside participation, not full coverage. ${pos.num_contracts} contracts at live Δ=${liveDelta.toFixed(2)} captures premium on a proportional share of production. Partial is the strategy.`;
 
-  // Options P&L: intrinsic value minus premium paid, per bushel
   const pnl = netPrice ? netPrice.options_pnl_per_bu : null;
 
   return (
@@ -247,11 +339,7 @@ function PositionRow({
         <Stat label="Held / Target" value={`${pos.num_contracts} / ${fmt(fullHedgeTarget, 1)}`} />
         <Stat label="Coverage" value={`${fmt(coveragePct, 0)}%`} tooltip={coverageTooltip} />
         {netPrice && (
-          <Stat
-            label="Net eff. price"
-            value={`$${fmt(netPrice.net_effective_price)}/bu`}
-            highlight
-          />
+          <Stat label="Net eff. price" value={`$${fmt(netPrice.net_effective_price)}/bu`} highlight />
         )}
         {pnl !== null && (
           <Stat
@@ -276,6 +364,56 @@ function PositionRow({
       {pos.notes && (
         <p className="text-xs text-[#7b8aab] italic">{pos.notes}</p>
       )}
+
+      <PositionActions pos={pos} />
+    </div>
+  );
+}
+
+function ClosedPositionRow({ pos }: { pos: Position }) {
+  const isClosed = pos.status === "CLOSED";
+  const statusColor = isClosed ? "text-[#7b8aab]" : "text-[#4a5568]";
+  const statusLabel = pos.status === "EXPIRED"
+    ? (pos.exit_reason === "expired_with_value" ? "EXPIRED (w/ value)" : "EXPIRED WORTHLESS")
+    : "CLOSED";
+
+  const realizedPnl = pos.realized_pnl_per_bu;
+  const totalRealized = realizedPnl != null ? realizedPnl * pos.expected_bushels : null;
+  const exitDateStr = pos.exit_date ? pos.exit_date.slice(0, 10) : null;
+
+  return (
+    <div className="bg-[#0d1117] rounded border border-[#1e2535] p-3 text-sm opacity-80">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <span className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded border border-[#2a3044] ${statusColor}`}>
+            {statusLabel}
+          </span>
+          <span className="text-[#7b8aab] font-medium">
+            {pos.contract_month} {pos.position_type.toUpperCase()} @${fmt(pos.strike)}
+          </span>
+          {exitDateStr && (
+            <span className="text-[#4a5568] text-xs">{exitDateStr}</span>
+          )}
+        </div>
+        <div className="flex items-center gap-3 text-xs">
+          {pos.exit_price_per_bu != null && (
+            <span className="text-[#7b8aab]">
+              Exit: ${fmt(pos.exit_price_per_bu, 3)}/bu
+            </span>
+          )}
+          {realizedPnl != null && (
+            <span className={`font-semibold tabular-nums ${realizedPnl >= 0 ? "text-[#22c55e]" : "text-[#ef4444]"}`}>
+              {realizedPnl >= 0 ? "+" : ""}${fmt(realizedPnl, 3)}/bu
+              {totalRealized != null && (
+                <span className="ml-1 opacity-70 font-normal">
+                  ({totalRealized >= 0 ? "+" : ""}${Math.abs(totalRealized).toLocaleString(undefined, { maximumFractionDigits: 0 })})
+                </span>
+              )}
+            </span>
+          )}
+        </div>
+      </div>
+      {pos.notes && <p className="text-xs text-[#4a5568] italic mt-1">{pos.notes}</p>}
     </div>
   );
 }

@@ -82,13 +82,49 @@ async def get_position(position_id: str) -> dict[str, Any] | None:
     return _serialize(doc)
 
 
-async def list_positions(active_only: bool = True) -> list[dict[str, Any]]:
+async def list_positions(status: str = "active") -> list[dict[str, Any]]:
+    """Filter positions by lifecycle status.
+
+    Handles backward-compat for docs that still have the old ``closed: bool``
+    field (written before the status enum was introduced).
+
+    status values: "active" | "closed" | "deleted" | "all"
+    """
     db = get_db()
-    filt: dict[str, Any] = {}
-    if active_only:
-        filt["closed"] = {"$ne": True}
+    if status == "active":
+        filt: dict[str, Any] = {"$or": [
+            {"status": "ACTIVE"},
+            {"status": {"$exists": False}, "closed": {"$ne": True}},
+        ]}
+    elif status == "closed":
+        filt = {"$or": [
+            {"status": {"$in": ["CLOSED", "EXPIRED"]}},
+            {"status": {"$exists": False}, "closed": True},
+        ]}
+    elif status == "deleted":
+        filt = {"status": "DELETED"}
+    else:  # "all" — exclude hard-deleted only
+        filt = {"status": {"$ne": "DELETED"}}
     cursor = db.positions.find(filt).sort("created_at", -1)
     return [_serialize(d) async for d in cursor]
+
+
+async def append_audit_entry(
+    position_id: str,
+    action: str,
+    changes: dict[str, Any],
+) -> None:
+    """Push one entry onto the embedded audit_log array."""
+    db = get_db()
+    entry = {
+        "timestamp": _now().isoformat(),
+        "action": action,
+        "changes": changes,
+    }
+    await db.positions.update_one(
+        {"_id": ObjectId(position_id)},
+        {"$push": {"audit_log": entry}},
+    )
 
 
 async def update_position(position_id: str, updates: dict[str, Any]) -> None:

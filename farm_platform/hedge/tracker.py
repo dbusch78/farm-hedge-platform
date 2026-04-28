@@ -13,9 +13,13 @@ A position document looks like:
     "phase": 1 | 2,
     "date_opened":  "2025-04-01T00:00:00Z",
     "cash_sale_price": null,     # filled in at Phase 2 transition
-    "closed": false,
-    "date_closed": null,
+    "status": "ACTIVE" | "CLOSED" | "EXPIRED" | "DELETED",
+    "exit_price_per_bu": null,   # set at close / expire time
+    "exit_date": null,
+    "exit_reason": null,         # "sold" | "expired_worthless" | "expired_with_value" | "data_error"
+    "realized_pnl_per_bu": null, # locked at close: exit_price - premium_paid
     "notes": "",
+    "audit_log": [],
     "created_at": "...",
     "updated_at": "...",
 }
@@ -23,11 +27,13 @@ A position document looks like:
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 import structlog
 
 from farm_platform.storage.mongo import (
+    append_audit_entry,
     create_position,
     get_position,
     list_positions,
@@ -60,14 +66,24 @@ def _validate(doc: dict[str, Any]) -> None:
         raise ValueError("phase must be 1 or 2")
 
 
+def _now_iso() -> str:
+    return datetime.now(tz=timezone.utc).isoformat()
+
+
 async def add_position(doc: dict[str, Any]) -> str:
     """Validate and insert a new position. Returns the new position ID."""
     _validate(doc)
-    doc.setdefault("closed", False)
+    doc.setdefault("status", "ACTIVE")
+    doc.setdefault("closed", False)           # backward-compat field
     doc.setdefault("cash_sale_price", None)
-    doc.setdefault("date_closed", None)
+    doc.setdefault("exit_price_per_bu", None)
+    doc.setdefault("exit_date", None)
+    doc.setdefault("exit_reason", None)
+    doc.setdefault("realized_pnl_per_bu", None)
     doc.setdefault("notes", "")
+    doc.setdefault("audit_log", [])
     position_id = await create_position(doc)
+    await append_audit_entry(position_id, "created", {})
     log.info("position_created", id=position_id, commodity=doc["commodity"])
     return position_id
 
@@ -76,24 +92,125 @@ async def get_position_by_id(position_id: str) -> dict[str, Any] | None:
     return await get_position(position_id)
 
 
-async def get_all_positions(active_only: bool = True) -> list[dict[str, Any]]:
-    return await list_positions(active_only=active_only)
+async def get_all_positions(
+    active_only: bool = True,
+    status: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return positions filtered by status.
+
+    ``active_only`` is the legacy parameter kept for callers that haven't
+    been updated; ``status`` takes precedence when supplied.
+    """
+    resolved = status if status is not None else ("active" if active_only else "all")
+    return await list_positions(resolved)
+
+
+async def close_position_with_pnl(
+    position_id: str,
+    exit_price_per_bu: float,
+    exit_date: str | None = None,
+    notes: str = "",
+) -> None:
+    """Mark a position CLOSED and lock in realized P&L."""
+    pos = await get_position(position_id)
+    if pos is None:
+        raise ValueError(f"Position {position_id} not found")
+
+    realized_pnl = round(exit_price_per_bu - pos["premium_paid_per_bu"], 4)
+    exit_dt = exit_date or _now_iso()
+
+    updates: dict[str, Any] = {
+        "status": "CLOSED",
+        "closed": True,                      # backward-compat
+        "exit_price_per_bu": exit_price_per_bu,
+        "exit_date": exit_dt,
+        "exit_reason": "sold",
+        "realized_pnl_per_bu": realized_pnl,
+    }
+    if notes:
+        existing = pos.get("notes", "")
+        updates["notes"] = f"{existing}\n[Closed] {notes}".strip() if existing else f"[Closed] {notes}"
+
+    await update_position(position_id, updates)
+    await append_audit_entry(position_id, "closed", {
+        "exit_price_per_bu": exit_price_per_bu,
+        "realized_pnl_per_bu": realized_pnl,
+    })
+    log.info("position_closed", id=position_id, realized_pnl_per_bu=realized_pnl)
+
+
+async def expire_position(
+    position_id: str,
+    exit_price_per_bu: float = 0.0,
+    exit_date: str | None = None,
+) -> None:
+    """Mark a position EXPIRED (held to expiration)."""
+    pos = await get_position(position_id)
+    if pos is None:
+        raise ValueError(f"Position {position_id} not found")
+
+    realized_pnl = round(exit_price_per_bu - pos["premium_paid_per_bu"], 4)
+    exit_dt = exit_date or _now_iso()
+    reason = "expired_with_value" if exit_price_per_bu > 0 else "expired_worthless"
+
+    await update_position(position_id, {
+        "status": "EXPIRED",
+        "closed": True,                      # backward-compat
+        "exit_price_per_bu": exit_price_per_bu,
+        "exit_date": exit_dt,
+        "exit_reason": reason,
+        "realized_pnl_per_bu": realized_pnl,
+    })
+    await append_audit_entry(position_id, "expired", {
+        "exit_price_per_bu": exit_price_per_bu,
+        "realized_pnl_per_bu": realized_pnl,
+        "reason": reason,
+    })
+    log.info("position_expired", id=position_id, realized_pnl_per_bu=realized_pnl)
+
+
+async def soft_delete_position(position_id: str) -> None:
+    """Soft-delete: sets status=DELETED. Never hard-deletes from MongoDB."""
+    pos = await get_position(position_id)
+    if pos is None:
+        raise ValueError(f"Position {position_id} not found")
+
+    await update_position(position_id, {"status": "DELETED", "exit_reason": "data_error"})
+    await append_audit_entry(position_id, "deleted", {})
+    log.info("position_deleted", id=position_id)
 
 
 async def transition_to_phase2(position_id: str, cash_sale_price: float) -> None:
     """Mark position as Phase 2: record cash sale price, open calls."""
     await update_position(position_id, {"phase": 2, "cash_sale_price": cash_sale_price})
+    await append_audit_entry(position_id, "updated", {
+        "phase": {"from": 1, "to": 2},
+        "cash_sale_price": {"from": None, "to": cash_sale_price},
+    })
     log.info("position_phase2_transition", id=position_id, cash_sale_price=cash_sale_price)
-
-
-async def close_position(position_id: str, date_closed: str) -> None:
-    await update_position(position_id, {"closed": True, "date_closed": date_closed})
-    log.info("position_closed", id=position_id)
 
 
 async def patch_position(position_id: str, updates: dict[str, Any]) -> None:
     """Apply partial updates to a position (e.g. update delta, notes)."""
-    # Strip protected fields
-    for key in ("_id", "id", "created_at"):
+    for key in ("_id", "id", "created_at", "status", "exit_price_per_bu",
+                "exit_date", "exit_reason", "realized_pnl_per_bu"):
         updates.pop(key, None)
+
+    if not updates:
+        return
+
+    old = await get_position(position_id)
+    changes = {
+        k: {"from": (old or {}).get(k), "to": v}
+        for k, v in updates.items()
+        if (old or {}).get(k) != v
+    }
     await update_position(position_id, updates)
+    if changes:
+        await append_audit_entry(position_id, "updated", changes)
+
+
+async def close_position(position_id: str, date_closed: str) -> None:
+    """Legacy shim — prefer close_position_with_pnl."""
+    await update_position(position_id, {"closed": True, "date_closed": date_closed})
+    log.info("position_closed_legacy", id=position_id)
