@@ -6,6 +6,7 @@ import {
   getNetPrices,
 } from "@/lib/api";
 import { cmeSymbolToLabel } from "@/lib/cme";
+import { calcLiveDelta, calcHedgeCoverage } from "@/lib/blackScholes";
 import type { FuturesPrice, NetPriceResponse, Position, OhlcBar, CashPrice } from "@/lib/types";
 import PriceChart from "@/components/charts/PriceChart";
 import ScenarioModeler from "@/components/trading/ScenarioModeler";
@@ -200,8 +201,26 @@ function PositionRow({
 }) {
   const isPhase1 = pos.phase === 1;
   const phaseBg = isPhase1 ? "bg-[#a3e63515] text-[#a3e635]" : "bg-[#3b82f615] text-[#3b82f6]";
-  const rawContracts = pos.expected_bushels / 5000;
-  const deltaAdj = rawContracts / pos.delta_at_entry;
+
+  // Live delta via Black-76 (hardcoded IV); falls back to delta_at_entry
+  const liveDelta = futuresClose !== null
+    ? calcLiveDelta({
+        futuresPrice: futuresClose,
+        strike: pos.strike,
+        commodity: pos.commodity,
+        contractMonth: pos.contract_month,
+        positionType: pos.position_type,
+        deltaAtEntry: pos.delta_at_entry,
+      })
+    : pos.delta_at_entry;
+  const { fullHedgeTarget, coveragePct } = calcHedgeCoverage(
+    pos.num_contracts,
+    pos.expected_bushels,
+    liveDelta,
+  );
+  const coverageTooltip = isPhase1
+    ? `Holding ${pos.num_contracts} of ${fmt(fullHedgeTarget, 1)} contracts for full delta-neutral coverage of ${pos.expected_bushels.toLocaleString()} bu at live Δ=${liveDelta.toFixed(2)}. Partial coverage is intentional — this is floor protection, not a 1:1 hedge.`
+    : `Phase 2 calls provide upside participation, not full coverage. ${pos.num_contracts} contracts at live Δ=${liveDelta.toFixed(2)} captures premium on a proportional share of production. Partial is the strategy.`;
 
   // Options P&L: intrinsic value minus premium paid, per bushel
   const pnl = netPrice ? netPrice.options_pnl_per_bu : null;
@@ -224,8 +243,9 @@ function PositionRow({
 
       <div className="grid grid-cols-3 gap-2 text-xs">
         <Stat label="Premium paid" value={`$${fmt(pos.premium_paid_per_bu)}/bu`} muted />
-        <Stat label="Delta at entry" value={pos.delta_at_entry.toFixed(2)} />
-        <Stat label="Raw / Δ-adj" value={`${fmt(rawContracts, 1)} / ${fmt(deltaAdj, 1)}`} />
+        <Stat label="Δ live / entry" value={`${liveDelta.toFixed(2)} / ${pos.delta_at_entry.toFixed(2)}`} />
+        <Stat label="Held / Target" value={`${pos.num_contracts} / ${fmt(fullHedgeTarget, 1)}`} />
+        <Stat label="Coverage" value={`${fmt(coveragePct, 0)}%`} tooltip={coverageTooltip} />
         {netPrice && (
           <Stat
             label="Net eff. price"
