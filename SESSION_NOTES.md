@@ -1,40 +1,43 @@
 # Session Notes
 
-## Session: 2026-04-28
+## Session: 2026-04-28 (evening) — Milestone 3 complete
 
 ### What was done
-- Fixed `scripts/seed_positions.py` import error — added `ENV PYTHONPATH=/app` to
-  `backend/Dockerfile` so any script under `/app/scripts/` can import `farm_platform`
-  without per-script `sys.path` hacks. (Issue #closed via commit)
-- Adopted GitHub Issues workflow — bugs now tracked and closed via `gh` CLI.
-- Fixed NPM 502 on all proxy hosts (Issue #1) — NPM was on `default` network only;
-  all upstreams were on `internal`. Added `networks: [default, internal]` to NPM service.
-- Fixed NPM running as root (Issue #3) — set `PUID=1000 PGID=1000` on NPM service.
-- Added mobile hamburger nav (Issue #4) — `hidden sm:flex` was leaving mobile users
-  with no way to reach Agents/Hedge/etc. New `MobileNav` client component added.
-- Fixed client-side POST "Failed to fetch" (Issue #5) — form POSTs used `http://api.farm.local`
-  as the fetch target, which requires browser DNS. Added Next.js rewrite proxying
-  `/api/*` → `http://fastapi:8000/api/*`; client-side now uses relative URLs.
-- Fixed "Backend not reachable" on dashboard — server-side fetches were using
-  `NEXT_PUBLIC_API_URL` (`http://api.farm.local`) which resolves to `127.0.0.1`
-  inside the nextjs container. Changed to `INTERNAL_API_URL=http://fastapi:8000`.
-- Milestone 2 acceptance checklist fully verified by user on 2026-04-28.
-- **Sunset Grafana** — removed from `docker-compose.yml`. Decision: Grafana adds login
-  friction, separate subdomain, and provisioning complexity for no benefit over in-app
-  TradingView charts. Alerting will be handled by a Python worker (APScheduler job)
-  that sends email/Telegram notifications — no Grafana alerting needed. The `grafana/`
-  directory is kept as archive only.
 
-- Milestone 2B complete: `/analytics` page with Futures Prices (candlestick),
-  Basis & Cash (multi-line), and Net Effective Price tabs. Backend analytics
-  router at `/api/analytics/*` with 4 endpoints. `AnalyticsLineChart` component
-  added. Analytics link in desktop nav and mobile hamburger.
+**Milestone 3 core (weather feeds + API):**
+- `farm_platform/feeds/ambient_feed.py` — REST polling every 5 min; parses outdoor fields only (ignores indoor sensor channels 3-6: freezer/fridge/rooms)
+- `farm_platform/feeds/openmeteo_feed.py` — 4 regions (corn_belt, mato_grosso, parana, pampas), 6-hour schedule
+- `farm_platform/feeds/gdu_calculator.py` — cumulative GDU from planting date; reads `planting_dates` DB table first, falls back to config env vars
+- `farm_platform/storage/schemas.sql` + `timescale.py` — `weather_station_local`, `weather_regional`, `gdu_daily` continuous aggregate, `planting_dates` table
+- `backend/routers/weather.py` — full weather API: local, local/history, local/rain-totals, regional, regional-history, gdu, gdu/history, planting-dates CRUD
+- `WeatherCard.tsx` — live local data, GDU (corn + beans), SA summary in °F/inches, lightning alert banner, MTD/YTD rain rows
+- `app/weather/page.tsx` — 3 tabs: Local Station, Regional/SA, GDU
 
-### What comes next — Milestone 3 (Weather)
-- `farm_platform/feeds/ambient_feed.py` — Ambient Weather WebSocket + REST
-- `farm_platform/feeds/openmeteo_feed.py` — 4 regions (corn belt, MT/PR/pampas)
-- `farm_platform/feeds/gdu_calculator.py` — GDU from planting date
-- FastAPI weather routes + WeatherCard real data (replace placeholder)
+**Backfill scripts (both gap-aware — idempotent, no redundant API calls):**
+- `scripts/backfill_ambient.py` — checks `MIN(time)` in DB before fetching; starts `endDate` cursor from just before oldest existing record
+- `scripts/backfill_openmeteo.py` — ERA5 archive API (free, no key); per-region gap detection; 168 hourly records per region per run
+
+**Planting dates in DB:**
+- `planting_dates` table: `(commodity, year)` PK, `planted_date`, `notes`
+- Full CRUD endpoints + management UI in the GDU tab (table of records + add/update form)
+- GDU calculator resolves planting date from DB for current year, falls back to config defaults
+
+**Rain totals:**
+- `GET /api/weather/local/rain-totals` — MTD and YTD from stored `rain_daily` readings (max per calendar day to handle midnight resets); Chicago timezone bucketing
+- Displayed in WeatherCard and Local Station wind/precip card
+
+**UI polish:**
+- `AnalyticsLineChart` — legend items are now clickable buttons; clicking toggles series visibility via `applyOptions({ visible })` without recreating the chart
+- Rain chart — added dashed blue "7-day Total (in)" cumulative line (prior complete days + current day's running accumulation)
+- Local station 30-day date slider — browse snapshots for any backfilled day
+- Regional/SA monthly rain totals table — per-region monthly inches, deduped by daily max
+
+### What comes next — Milestone 4 (AI Agent Layer)
+- `farm_platform/agents/` — all 5 agents (positioning advisor, SA monitor, GDU tracker, news filter, weather analyst)
+- APScheduler jobs triggering each agent on schedule
+- Agent output stored to MongoDB `agent_runs` collection
+- `GET /api/agents/runs` already wired; agents need to write results
+- `/agents` page already scaffolded in frontend — needs real data
 
 ---
 

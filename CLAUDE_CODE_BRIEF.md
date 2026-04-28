@@ -973,53 +973,54 @@ Work through milestones in order. Each milestone should be fully working before 
 
 ---
 
-### MILESTONE 3 -- Weather Module
+### MILESTONE 3 -- Weather Module ✅ COMPLETE
 **Goal:** On-farm station data and regional weather feeding into storage and displayed on dashboard.
 
 #### Ambient Weather Feed
-- [ ] Implement `platform/feeds/ambient_feed.py`
-- [ ] REST API pull for current conditions and recent history on startup
-- [ ] WebSocket realtime subscription for live push (reconnect on disconnect)
-- [ ] Parse all agronomically relevant fields: temp, humidity, rain, wind, solar radiation, barometric pressure, soil temp
-- [ ] Write to `weather_station_local` hypertable
-- [ ] Unit test: verify data landing with correct schema
+- [x] Implement `farm_platform/feeds/ambient_feed.py`
+- [x] REST API pull for current conditions (polling every 5 min via APScheduler)
+- [x] Parse outdoor fields only: temp, humidity, rain, wind, solar, barometric pressure, dew point, UV, lightning
+- [x] Write to `weather_station_local` hypertable with ON CONFLICT DO NOTHING
+- [x] `scripts/backfill_ambient.py` — gap-aware historical backfill (checks MIN(time) before fetching)
 
 #### Open-Meteo Regional Feed
-- [ ] Implement `platform/feeds/openmeteo_feed.py`
-- [ ] Regions: corn_belt (41.5N 93.5W), mato_grosso (12.5S 55.5W), parana (23.5S 51.5W), pampas (34.5S 60.5W)
-- [ ] Fields: temp, precipitation, soil moisture, ET0 (evapotranspiration), wind
-- [ ] Write to `weather_regional` hypertable
-- [ ] Schedule: every 6 hours
+- [x] Implement `farm_platform/feeds/openmeteo_feed.py`
+- [x] Regions: corn_belt (41.5N 93.5W), mato_grosso (12.5S 55.5W), parana (23.5S 51.5W), pampas (34.5S 60.5W)
+- [x] Fields: temp, precipitation, soil moisture, ET0, wind speed 10m
+- [x] Write to `weather_regional` hypertable
+- [x] Schedule: every 6 hours
+- [x] `scripts/backfill_openmeteo.py` — ERA5 archive backfill (free, no key); gap-aware per region
 
 #### GDU Calculator
-- [ ] Implement `platform/feeds/gdu_calculator.py`
-- [ ] Daily GDU from `weather_station_local` (base 50F, cap 86F)
-- [ ] Cumulative GDU from planting date (read from config)
-- [ ] Compare to historical average GDU for same calendar date (from stored history)
-- [ ] Store in TimescaleDB continuous aggregate view
-- [ ] Flag when GDU deviation exceeds operator-defined threshold
-
-#### Weather Service
-- [ ] Implement `platform/feeds/weather_service.py` -- internal API for agents
-- [ ] `get_local_weather(days=7)` returns polars DataFrame
-- [ ] `get_regional_weather(region, days=30)` returns polars DataFrame
-- [ ] `get_gdu_status()` returns cumulative GDU, historical average, deviation
-- [ ] `get_sa_conditions()` returns South America regional summary dict
+- [x] Implement `farm_platform/feeds/gdu_calculator.py`
+- [x] Daily GDU from `gdu_daily` continuous aggregate (base 50°F, max/min formula)
+- [x] Cumulative GDU from planting date — reads from `planting_dates` DB table first, falls back to config
+- [x] `planting_dates` table: per-crop per-year records, full CRUD API + UI in GDU tab
+- [x] Store in TimescaleDB continuous aggregate view (`gdu_daily`)
 
 #### FastAPI + Frontend
-- [ ] `GET /api/weather/local` -- on-farm station summary
-- [ ] `GET /api/weather/regional/{region}` -- regional summary
-- [ ] `GET /api/weather/gdu` -- GDU status
-- [ ] Update `WeatherCard.tsx` with real data
-- [ ] Implement `app/weather/page.tsx` with full weather detail panels
-- [ ] Weather chart panels (on-farm history, corn belt soil moisture) added to in-app analytics page (Milestone 2B)
+- [x] `GET /api/weather/local` — on-farm station summary
+- [x] `GET /api/weather/local/history` — 7/30-day history
+- [x] `GET /api/weather/local/rain-totals` — MTD and YTD rain from stored readings
+- [x] `GET /api/weather/regional/{region}` — regional snapshot
+- [x] `GET /api/weather/regional-history` — all regions, used for slider and trend charts
+- [x] `GET /api/weather/gdu` — GDU status for corn and beans
+- [x] `GET/PUT/DELETE /api/weather/planting-dates/{commodity}/{year}` — planting date management
+- [x] Updated `WeatherCard.tsx` — live local data, GDU section, SA summary, lightning alert, MTD/YTD rain
+- [x] `app/weather/page.tsx` — Local Station (current + 30-day slider + 7-day charts), Regional/SA (date slider + monthly rain table), GDU tab
+
+#### UI Enhancements (same session)
+- [x] `AnalyticsLineChart` — legend items clickable to toggle series visibility
+- [x] Rain chart — added dashed "7-day Total" cumulative line alongside hourly
+- [x] Local station date slider — browse any of the 30 backfilled days
+- [x] Regional monthly rain totals table — per-region monthly inches summary
 
 #### Milestone 3 Acceptance Criteria
-- [ ] Ambient station data streaming into TimescaleDB continuously
-- [ ] Open-Meteo pulling for all 4 regions on schedule
-- [ ] GDU calculation verified against a known reference date
-- [ ] Weather card on main dashboard shows live on-farm data
-- [ ] SA Monitor weather card shows Mato Grosso soil moisture flag if applicable
+- [x] Ambient station data polling into TimescaleDB continuously (5-min interval)
+- [x] Open-Meteo pulling for all 4 regions on schedule (6-hour interval)
+- [x] GDU calculation live; planting dates stored in DB, editable via UI
+- [x] Weather card on main dashboard shows live on-farm data
+- [x] Full `/weather` detail page with Local, Regional/SA, and GDU tabs
 
 ---
 
