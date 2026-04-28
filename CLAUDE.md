@@ -122,4 +122,37 @@ Fixed in commit 39651f5 (Issue #8). The backend `/net-price` endpoint appended
 one row per position; the frontend's `.find()` picked only the first ZS match,
 showing -$0.20/bu instead of the correct blended +$0.88/bu across two bean positions.
 
+## Aggregates Do Not Replace Per-Position Values
+
+When aggregation is implemented, per-position data must remain accessible and
+correctly displayed on per-position views. The aggregation produces a new value
+(the rollup) without overwriting or replacing the underlying per-position values.
+
+### Display routing rule
+
+- **Hedge card / commodity rollup**: show the weighted aggregate
+- **Position detail card**: show that position's own values
+- A position card must never display the rollup that includes itself — that is
+  circular and uninformative (it hides per-position differences)
+
+If you find yourself passing the aggregate object to per-position render logic,
+stop. The per-position render needs the position's own record, not the rollup.
+
+### How to compute per-position P&L in the frontend
+
+Do not fetch or pass the aggregate. Compute inline from the position record:
+
+```typescript
+// intrinsic value
+const intrinsic = isPhase1
+  ? Math.max(pos.strike - futuresClose, 0)   // put
+  : Math.max(futuresClose - pos.strike, 0);  // call
+
+const positionPnl = intrinsic - pos.premium_paid_per_bu;
+
+// net effective price
+const cashBase = isPhase1 ? futuresClose : (pos.cash_sale_price ?? futuresClose);
+const netEffPrice = cashBase + intrinsic - pos.premium_paid_per_bu;
+```
+
 ---

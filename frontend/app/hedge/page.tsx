@@ -246,7 +246,7 @@ function CommoditySection({
             Active Positions ({positions.length})
           </h3>
           {positions.map((pos) => (
-            <PositionRow key={pos.id} pos={pos} netPrice={netPrice} futuresClose={futuresClose} />
+            <PositionRow key={pos.id} pos={pos} futuresClose={futuresClose} />
           ))}
         </div>
       ) : (
@@ -285,11 +285,9 @@ function CommoditySection({
 
 function PositionRow({
   pos,
-  netPrice,
   futuresClose,
 }: {
   pos: Position;
-  netPrice: NetPriceResponse | null;
   futuresClose: number | null;
 }) {
   const isPhase1 = pos.phase === 1;
@@ -315,7 +313,24 @@ function PositionRow({
     ? `Holding ${pos.num_contracts} of ${fmt(fullHedgeTarget, 1)} contracts for full delta-neutral coverage of ${pos.expected_bushels.toLocaleString()} bu at live Δ=${liveDelta.toFixed(2)}. Partial coverage is intentional — this is floor protection, not a 1:1 hedge.`
     : `Phase 2 calls provide upside participation, not full coverage. ${pos.num_contracts} contracts at live Δ=${liveDelta.toFixed(2)} captures premium on a proportional share of production. Partial is the strategy.`;
 
-  const pnl = netPrice ? netPrice.options_pnl_per_bu : null;
+  // Per-position P&L and net effective price from this position's own data only.
+  // Never use the commodity aggregate here — it would be circular and hide
+  // per-position differences when multiple positions share a commodity.
+  const intrinsic = futuresClose !== null
+    ? (isPhase1
+        ? Math.max(pos.strike - futuresClose, 0)
+        : Math.max(futuresClose - pos.strike, 0))
+    : null;
+  const positionPnl = intrinsic !== null ? intrinsic - pos.premium_paid_per_bu : null;
+  // Phase 2: net = cash_sale_price + call_intrinsic - premium
+  // Phase 1: net = futures (proxy for cash) + put_intrinsic - premium
+  const cashBase = isPhase1 ? futuresClose : (pos.cash_sale_price ?? futuresClose);
+  const netEffPrice = (cashBase !== null && intrinsic !== null)
+    ? cashBase + intrinsic - pos.premium_paid_per_bu
+    : null;
+  const netEffVsSpot = (netEffPrice !== null && futuresClose !== null)
+    ? netEffPrice - futuresClose
+    : null;
 
   return (
     <div className="bg-[#141920] rounded border border-[#2a3044] p-3 text-sm space-y-2">
@@ -338,22 +353,22 @@ function PositionRow({
         <Stat label="Δ live / entry" value={`${liveDelta.toFixed(2)} / ${pos.delta_at_entry.toFixed(2)}`} />
         <Stat label="Held / Target" value={`${pos.num_contracts} / ${fmt(fullHedgeTarget, 1)}`} />
         <Stat label="Coverage" value={`${fmt(coveragePct, 0)}%`} tooltip={coverageTooltip} />
-        {netPrice && (
-          <Stat label="Net eff. price" value={`$${fmt(netPrice.net_effective_price)}/bu`} highlight />
+        {netEffPrice !== null && (
+          <Stat label="Net eff. price" value={`$${fmt(netEffPrice)}/bu`} highlight />
         )}
-        {pnl !== null && (
+        {positionPnl !== null && (
           <Stat
             label="Options P&L"
-            value={`${pnl >= 0 ? "+" : ""}$${fmt(pnl)}/bu`}
-            positive={pnl >= 0}
+            value={`${positionPnl >= 0 ? "+" : ""}$${fmt(positionPnl)}/bu`}
+            positive={positionPnl >= 0}
           />
         )}
-        {netPrice && futuresClose !== null && (
+        {netEffVsSpot !== null && (
           <Stat
             label="Net Eff. vs Spot"
-            value={`${netPrice.net_effective_vs_spot_per_bu >= 0 ? "+" : ""}$${fmt(netPrice.net_effective_vs_spot_per_bu)}/bu`}
-            positive={netPrice.net_effective_vs_spot_per_bu >= 0}
-            tooltip="How your locked-in net price compares to current market. Negative means the market rallied after your sale — expected for Phase 2 calls."
+            value={`${netEffVsSpot >= 0 ? "+" : ""}$${fmt(netEffVsSpot)}/bu`}
+            positive={netEffVsSpot >= 0}
+            tooltip="How this position's net price compares to current market. Negative means the market rallied after your sale — expected for Phase 2 calls."
           />
         )}
         {pos.phase === 2 && pos.cash_sale_price != null && (
