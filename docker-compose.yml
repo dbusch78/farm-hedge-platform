@@ -61,6 +61,7 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: http://api.farm.local
       NEXT_PUBLIC_WS_URL: ws://api.farm.local
+      INTERNAL_API_URL: http://fastapi:8000
     networks:
       - internal
     depends_on:

@@ -12,8 +12,13 @@ import type {
   AgentRun,
 } from "./types";
 
+// Server-side: fetch directly to the backend container.
+// Client-side: use relative URL — next.config.ts rewrites /api/* to fastapi,
+// so the browser never needs to resolve api.farm.local.
 const BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+  typeof window === "undefined"
+    ? (process.env.NEXT_PUBLIC_API_URL ?? "http://fastapi:8000")
+    : "";
 
 async function request<T>(
   path: string,
