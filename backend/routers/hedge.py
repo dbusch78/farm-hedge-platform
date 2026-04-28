@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from typing import Any
 
 import structlog
@@ -196,7 +197,38 @@ async def get_net_prices() -> list[dict[str, Any]]:
                 "raw_contracts": result2.raw_contracts,
                 "delta_adj_contracts": result2.delta_adj_contracts,
             })
-    return results
+    # Aggregate per-commodity: weighted average by raw_contracts so that
+    # multiple positions in the same commodity (e.g. two bean put strikes)
+    # collapse to a single row instead of the frontend finding only the first.
+    by_commodity: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for r in results:
+        by_commodity[r["commodity"]].append(r)
+
+    aggregated: list[dict[str, Any]] = []
+    for commodity, group in by_commodity.items():
+        if len(group) == 1:
+            aggregated.append(group[0])
+            continue
+        total_raw = sum(r["raw_contracts"] for r in group)
+
+        def _wavg(field: str) -> float:
+            return sum(r[field] * r["raw_contracts"] for r in group) / total_raw
+
+        aggregated.append({
+            "commodity": commodity,
+            "phase": group[0]["phase"],
+            "underlying_price": group[0]["underlying_price"],
+            "net_effective_price": _wavg("net_effective_price"),
+            "put_intrinsic": _wavg("put_intrinsic"),
+            "call_intrinsic": _wavg("call_intrinsic"),
+            "options_pnl_per_bu": _wavg("options_pnl_per_bu"),
+            "net_effective_vs_spot_per_bu": _wavg("net_effective_vs_spot_per_bu"),
+            "total_premiums_paid": _wavg("total_premiums_paid"),
+            "raw_contracts": total_raw,
+            "delta_adj_contracts": sum(r["delta_adj_contracts"] for r in group),
+        })
+
+    return aggregated
 
 
 # ── Scenario modeler ─────────────────────────────────────────────────────────
