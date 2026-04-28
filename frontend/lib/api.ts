@@ -193,6 +193,10 @@ export async function getRegionalWeather(region: string): Promise<WeatherRegiona
   return request<WeatherRegional>(`/api/weather/regional/${region}`);
 }
 
+export async function getRegionalHistory(days = 180): Promise<WeatherRegional[]> {
+  return request<WeatherRegional[]>(`/api/weather/regional-history?days=${days}`);
+}
+
 export async function getGduStatus(): Promise<GduStatus> {
   return request<GduStatus>("/api/weather/gdu");
 }

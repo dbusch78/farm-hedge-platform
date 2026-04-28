@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 
 from farm_platform.feeds.gdu_calculator import get_gdu_history, get_gdu_status
 from farm_platform.storage.timescale import (
+    get_all_regional_history,
     get_latest_weather_local,
     get_latest_weather_regional,
     get_weather_local_history,
@@ -74,6 +75,23 @@ async def get_regional_weather(region: str) -> dict:
 async def gdu_status() -> dict:
     corn, beans = await get_gdu_status("corn"), await get_gdu_status("beans")
     return {"corn": corn, "beans": beans}
+
+
+@router.get("/regional-history")
+async def regional_history(days: int = 180) -> list[dict]:
+    rows = await get_all_regional_history(days)
+    return [
+        {
+            "time": r["time"].isoformat(),
+            "region": r["region"],
+            "temp_c": float(r["temp_c"]) if r["temp_c"] is not None else None,
+            "precip_mm": float(r["precip_mm"]) if r["precip_mm"] is not None else None,
+            "soil_moisture": float(r["soil_moisture"]) if r["soil_moisture"] is not None else None,
+            "et0": float(r["et0"]) if r["et0"] is not None else None,
+            "wind_speed_10m": float(r["wind_speed_10m"]) if r["wind_speed_10m"] is not None else None,
+        }
+        for r in rows
+    ]
 
 
 @router.get("/gdu/history")

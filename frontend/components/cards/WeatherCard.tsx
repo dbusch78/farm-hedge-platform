@@ -171,7 +171,9 @@ export default function WeatherCard() {
               <div>
                 <p className="text-[10px] text-[#7b8aab]">Mato Grosso</p>
                 <p className="text-xs text-[#e8edf5]">
-                  {fmt(matoGrosso.temp_c, 0, "°C")} · {fmt(matoGrosso.precip_mm, 1, "mm rain")}
+                  {matoGrosso.temp_c != null ? `${Math.round(matoGrosso.temp_c * 9/5 + 32)}°F` : "—"}
+                  {" · "}
+                  {matoGrosso.precip_mm != null ? `${(matoGrosso.precip_mm / 25.4).toFixed(2)}" rain` : "—"}
                 </p>
                 {matoGrosso.soil_moisture != null && (
                   <p className="text-[10px] text-[#4a5568]">
@@ -184,7 +186,9 @@ export default function WeatherCard() {
               <div>
                 <p className="text-[10px] text-[#7b8aab]">Pampas (AR)</p>
                 <p className="text-xs text-[#e8edf5]">
-                  {fmt(pampas.temp_c, 0, "°C")} · {fmt(pampas.precip_mm, 1, "mm rain")}
+                  {pampas.temp_c != null ? `${Math.round(pampas.temp_c * 9/5 + 32)}°F` : "—"}
+                  {" · "}
+                  {pampas.precip_mm != null ? `${(pampas.precip_mm / 25.4).toFixed(2)}" rain` : "—"}
                 </p>
                 {pampas.soil_moisture != null && (
                   <p className="text-[10px] text-[#4a5568]">

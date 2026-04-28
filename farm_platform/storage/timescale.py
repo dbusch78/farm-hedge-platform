@@ -258,6 +258,18 @@ async def get_latest_weather_regional(region: str) -> asyncpg.Record | None:
     )
 
 
+async def get_all_regional_history(days: int = 180) -> list[asyncpg.Record]:
+    return await fetch(
+        """
+        SELECT time, region, temp_c, precip_mm, soil_moisture, et0, wind_speed_10m
+        FROM weather_regional
+        WHERE time >= NOW() - ($1 || ' days')::INTERVAL
+        ORDER BY time ASC
+        """,
+        str(days),
+    )
+
+
 async def get_gdu_history(days: int = 180) -> list[asyncpg.Record]:
     return await fetch(
         """
