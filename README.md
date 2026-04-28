@@ -226,37 +226,37 @@ npm run build      # Type-checks and produces a production build -- exit 0 = cle
 Work through these after the Docker stack is up and DNS is resolving. Substitute `localhost` for `farm.local` etc. if testing in WSL before setting up the hosts file.
 
 ### Infrastructure
-- [ ] `docker compose ps` shows all services running, none restarting
-- [ ] `http://api.farm.local/docs` loads FastAPI OpenAPI UI
-- [ ] `http://grafana.farm.local` loads Grafana login
-- [ ] `http://farm.local` loads the dashboard in a browser
+- [x] `docker compose ps` shows all services running, none restarting
+- [x] `http://api.farm.local/docs` loads FastAPI OpenAPI UI
+- [x] `http://grafana.farm.local` loads Grafana login
+- [x] `http://farm.local` loads the dashboard in a browser
 
 ### Live prices and WebSocket
-- [ ] Main dashboard shows ZC and ZS prices on the HedgeCard
-- [ ] Prices update without a page refresh (WebSocket connected — check DevTools → Network → WS)
-- [ ] ZW (wheat) leading indicator card shows a price
-- [ ] Stale indicator appears if the backend is stopped and ~60 seconds elapse
+- [x] Main dashboard shows ZC and ZS prices on the HedgeCard
+- [x] Prices update without a page refresh (WebSocket connected — check DevTools → Network → WS)
+- [x] ZW (wheat) leading indicator card shows a price
+- [x] Stale indicator appears if the backend is stopped and ~60 seconds elapse
 
 ### Hedge card and positions
-- [ ] HedgeCard shows correct bushels, contracts, premium cost, and net effective price for each open position
-- [ ] Phase 1 positions have yellow-green border; Phase 2 positions have blue border
+- [x] HedgeCard shows correct bushels, contracts, premium cost, and net effective price for each open position
+- [x] Phase 1 positions have yellow-green border; Phase 2 positions have blue border
 
 ### Hedge detail page (`/hedge`)
-- [ ] ZC and ZS sections each show a TradingView candlestick chart with basis overlay
-- [ ] Strike price horizontal line and net effective price line visible on chart
-- [ ] Position list renders under each commodity section
-- [ ] Scenario modeler: enter a price range and step count, verify the output table rows change
-- [ ] Highlighted row tracks the current futures price; at-strike row highlighted differently
+- [x] ZC and ZS sections each show a TradingView candlestick chart with basis overlay
+- [x] Strike price horizontal line and net effective price line visible on chart
+- [x] Position list renders under each commodity section
+- [x] Scenario modeler: enter a price range and step count, verify the output table rows change
+- [x] Highlighted row tracks the current futures price; at-strike row highlighted differently
 
 ### Position entry form
-- [ ] Form at bottom of `/hedge` renders all fields
-- [ ] Delta-adjusted contract count updates live as you type bushels and delta
-- [ ] Cash sale price field appears when option type is set to `call` (Phase 2)
-- [ ] Submitting the form adds a position (verify via `GET /api/hedge/positions` in FastAPI docs)
+- [x] Form at bottom of `/hedge` renders all fields
+- [x] Delta-adjusted contract count updates live as you type bushels and delta
+- [x] Cash sale price field appears when option type is set to `call` (Phase 2)
+- [x] Submitting the form adds a position (verify via `GET /api/hedge/positions` in FastAPI docs)
 
 ### Mobile (production environment only)
-- [ ] Load `farm.local` from a phone on the LAN — all cards readable, no overflow
-- [ ] Load `farm.local` from a phone on VPN (outside LAN) — same result
+- [x] Load `farm.local` from a phone on the LAN — all cards readable, no overflow
+- [x] Load `farm.local` from a phone on VPN (outside LAN) — same result
 
 ---
 

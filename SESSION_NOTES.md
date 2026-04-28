@@ -1,5 +1,34 @@
 # Session Notes
 
+## Session: 2026-04-28
+
+### What was done
+- Fixed `scripts/seed_positions.py` import error — added `ENV PYTHONPATH=/app` to
+  `backend/Dockerfile` so any script under `/app/scripts/` can import `farm_platform`
+  without per-script `sys.path` hacks. (Issue #closed via commit)
+- Adopted GitHub Issues workflow — bugs now tracked and closed via `gh` CLI.
+- Fixed NPM 502 on all proxy hosts (Issue #1) — NPM was on `default` network only;
+  all upstreams were on `internal`. Added `networks: [default, internal]` to NPM service.
+- Fixed Grafana plugin permission error (Issue #2) — added `GF_PLUGINS_PREINSTALL_AUTO_UPDATE=false`;
+  created stub provisioning subdirs to clear 4 startup errors.
+- Fixed NPM running as root (Issue #3) — set `PUID=1000 PGID=1000` on NPM service.
+- Added mobile hamburger nav (Issue #4) — `hidden sm:flex` was leaving mobile users
+  with no way to reach Agents/Hedge/etc. New `MobileNav` client component added.
+- Fixed client-side POST "Failed to fetch" (Issue #5) — form POSTs used `http://api.farm.local`
+  as the fetch target, which requires browser DNS. Added Next.js rewrite proxying
+  `/api/*` → `http://fastapi:8000/api/*`; client-side now uses relative URLs.
+- Fixed "Backend not reachable" on dashboard — server-side fetches were using
+  `NEXT_PUBLIC_API_URL` (`http://api.farm.local`) which resolves to `127.0.0.1`
+  inside the nextjs container. Changed to `INTERNAL_API_URL=http://fastapi:8000`.
+- Milestone 2 acceptance checklist fully verified by user on 2026-04-28.
+
+### What comes next — Milestone 2 Grafana
+- [ ] Connect Grafana to TimescaleDB
+- [ ] Build 3 dashboards: futures OHLC, basis history, net effective price
+- [ ] Export dashboard JSONs to `grafana/provisioning/dashboards/`
+
+---
+
 ## Session: 2026-04-27
 
 ### What was done
@@ -29,12 +58,12 @@
   - `run_once()` -- folds `futures_response` into the MongoDB snapshot alongside
     `raw_response` when futures data is available
 
-### What comes next (Milestone 2 remaining -- needs Docker stack)
-- [ ] Mobile layout verified on phone over VPN
-- [ ] `farm.local` loads and hedge card shows live prices
-- [ ] WebSocket price updates verified without page refresh
-- [ ] Scenario modeler tested with real data
-- [ ] TradingView chart renders with real OHLC data
+### Milestone 2 remaining — all verified 2026-04-28
+- [x] Mobile layout verified on phone over VPN
+- [x] `farm.local` loads and hedge card shows live prices
+- [x] WebSocket price updates verified without page refresh
+- [x] Scenario modeler tested with real data
+- [x] TradingView chart renders with real OHLC data
 
 ---
 
@@ -98,12 +127,12 @@
 
 **Build:** clean (`npm run build` exit 0, both `/` and `/hedge` routes compile)
 
-### What comes next (Milestone 2 remaining -- needs Docker stack)
-- [ ] Mobile layout verified on phone over VPN
-- [ ] `farm.local` loads and hedge card shows live prices
-- [ ] WebSocket price updates verified without page refresh
-- [ ] Scenario modeler tested with real data
-- [ ] TradingView chart renders with real OHLC data
+### Milestone 2 remaining — all verified 2026-04-28
+- [x] Mobile layout verified on phone over VPN
+- [x] `farm.local` loads and hedge card shows live prices
+- [x] WebSocket price updates verified without page refresh
+- [x] Scenario modeler tested with real data
+- [x] TradingView chart renders with real OHLC data
 
 ### After Milestone 2 acceptance (Milestone 2 Grafana -- needs Docker)
 - [ ] Connect Grafana to TimescaleDB, build 3 dashboards (futures OHLC, basis history,
