@@ -5,13 +5,17 @@ import AnalyticsLineChart, {
   type ChartSeries,
 } from "@/components/charts/AnalyticsLineChart";
 import {
+  deletePlantingDate,
   getGduStatus,
   getLocalWeather,
   getLocalWeatherHistory,
+  getPlantingDates,
+  getRainTotals,
   getRegionalHistory,
   getRegionalWeather,
+  setPlantingDate,
 } from "@/lib/api";
-import type { GduStatus, WeatherLocal, WeatherRegional } from "@/lib/types";
+import type { GduStatus, PlantingDate, RainTotals, WeatherLocal, WeatherRegional } from "@/lib/types";
 
 // ── Unit helpers ──────────────────────────────────────────────────────────────
 
@@ -102,11 +106,14 @@ function RegionalHistoryView({ history }: { history: WeatherRegional[] }) {
 
   if (dates.length === 0) {
     return (
-      <p className="text-sm text-[#4a5568] italic">
-        Regional history will populate after the Open-Meteo feed runs for several days.
-        Back-fill is not available for regional data (Open-Meteo only provides current
-        conditions; history builds up naturally over time).
-      </p>
+      <div className="space-y-3">
+        <p className="text-sm text-[#4a5568] italic">
+          No regional history yet. Run the ERA5 backfill to load up to 180 days:
+        </p>
+        <code className="block text-xs text-[#7b8aab] bg-[#141920] border border-[#2a3044] rounded px-3 py-2">
+          docker compose exec fastapi python scripts/backfill_openmeteo.py
+        </code>
+      </div>
     );
   }
 
@@ -190,23 +197,33 @@ function RegionalHistoryView({ history }: { history: WeatherRegional[] }) {
 export default function WeatherPage() {
   const [tab, setTab] = useState<Tab>("local");
   const [current, setCurrent] = useState<WeatherLocal | null>(null);
+  const [rain, setRain] = useState<RainTotals | null>(null);
   const [history, setHistory] = useState<WeatherLocal[]>([]);
   const [regionalHistory, setRegionalHistory] = useState<WeatherRegional[]>([]);
   const [gdu, setGdu] = useState<GduStatus | null>(null);
+  const [plantingDates, setPlantingDates] = useState<PlantingDate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [plantingForm, setPlantingForm] = useState<{ commodity: string; year: string; date: string; notes: string }>({
+    commodity: "corn", year: String(new Date().getFullYear()), date: "", notes: "",
+  });
+  const [plantingSaving, setPlantingSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [localRes, histRes, gduRes, regHistRes] = await Promise.allSettled([
+    const [localRes, histRes, rainRes, gduRes, regHistRes, plantRes] = await Promise.allSettled([
       getLocalWeather(),
       getLocalWeatherHistory(7),
+      getRainTotals(),
       getGduStatus(),
       getRegionalHistory(180),
+      getPlantingDates(),
     ]);
     if (localRes.status === "fulfilled") setCurrent(localRes.value);
     if (histRes.status === "fulfilled") setHistory(histRes.value);
+    if (rainRes.status === "fulfilled") setRain(rainRes.value);
     if (gduRes.status === "fulfilled") setGdu(gduRes.value);
     if (regHistRes.status === "fulfilled") setRegionalHistory(regHistRes.value);
+    if (plantRes.status === "fulfilled") setPlantingDates(plantRes.value);
     setLoading(false);
   }, []);
 
@@ -311,6 +328,10 @@ export default function WeatherPage() {
                     <DetailRow label="Gust"               value={`${fmt(current.wind_gust_mph, 1)} mph`} />
                     <DetailRow label="Rain (hourly)"      value={fmtIn(current.rain_hourly, 3)} />
                     <DetailRow label="Rain (today)"       value={fmtIn(current.rain_daily)} />
+                    {rain && <>
+                      <DetailRow label="Rain (month-to-date)" value={rain.mtd_in != null ? fmtIn(rain.mtd_in) : "—"} />
+                      <DetailRow label="Rain (year-to-date)"  value={rain.ytd_in != null ? fmtIn(rain.ytd_in) : "—"} />
+                    </>}
                   </div>
                   <div className="bg-[#141920] rounded-lg border border-[#2a3044] p-4">
                     <p className="text-xs text-[#7b8aab] uppercase tracking-wider mb-3">Solar &amp; Radiation</p>
@@ -345,7 +366,7 @@ export default function WeatherPage() {
 
           {/* ── GDU ── */}
           {tab === "gdu" && (
-            <div className="space-y-4">
+            <div className="space-y-6">
               {gdu == null ? (
                 <p className="text-sm text-[#4a5568] italic">
                   GDU data will appear once local weather polling has run for at least one day.
@@ -384,6 +405,121 @@ export default function WeatherPage() {
                   })}
                 </div>
               )}
+
+              {/* Planting date history & management */}
+              <div className="bg-[#141920] rounded-lg border border-[#2a3044] p-4 space-y-4">
+                <p className="text-xs text-[#7b8aab] uppercase tracking-wider">Planting Date Records</p>
+
+                {plantingDates.length === 0 ? (
+                  <p className="text-xs text-[#4a5568] italic">No planting dates recorded yet.</p>
+                ) : (
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-[#4a5568] text-left">
+                        <th className="pb-1 font-normal">Crop</th>
+                        <th className="pb-1 font-normal">Year</th>
+                        <th className="pb-1 font-normal">Planted</th>
+                        <th className="pb-1 font-normal">Notes</th>
+                        <th className="pb-1 font-normal"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {plantingDates.map((p) => (
+                        <tr key={`${p.commodity}-${p.year}`} className="border-t border-[#1e2535]">
+                          <td className="py-1.5 text-[#e8edf5] capitalize">{p.commodity}</td>
+                          <td className="py-1.5 text-[#e8edf5]">{p.year}</td>
+                          <td className="py-1.5 text-[#e8edf5] tabular-nums">
+                            {new Date(p.planted_date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                          </td>
+                          <td className="py-1.5 text-[#7b8aab]">{p.notes ?? ""}</td>
+                          <td className="py-1.5 text-right">
+                            <button
+                              onClick={async () => {
+                                await deletePlantingDate(p.commodity, p.year);
+                                setPlantingDates((d) => d.filter((x) => !(x.commodity === p.commodity && x.year === p.year)));
+                              }}
+                              className="text-[#ef4444] hover:text-red-300 text-[10px]"
+                            >
+                              Remove
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+
+                {/* Add / update form */}
+                <div className="pt-2 border-t border-[#1e2535]">
+                  <p className="text-[10px] text-[#4a5568] mb-2">Add or update a planting date</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
+                    <div>
+                      <label className="text-[9px] uppercase tracking-widest text-[#7b8aab] block mb-0.5">Crop</label>
+                      <select
+                        value={plantingForm.commodity}
+                        onChange={(e) => setPlantingForm((f) => ({ ...f, commodity: e.target.value }))}
+                        className="w-full bg-[#0d1117] border border-[#2a3044] rounded px-2 py-1 text-xs text-[#e8edf5]"
+                      >
+                        <option value="corn">Corn</option>
+                        <option value="beans">Soybeans</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[9px] uppercase tracking-widest text-[#7b8aab] block mb-0.5">Year</label>
+                      <input
+                        type="number"
+                        value={plantingForm.year}
+                        onChange={(e) => setPlantingForm((f) => ({ ...f, year: e.target.value }))}
+                        className="w-full bg-[#0d1117] border border-[#2a3044] rounded px-2 py-1 text-xs text-[#e8edf5]"
+                        min={2020}
+                        max={2040}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] uppercase tracking-widest text-[#7b8aab] block mb-0.5">Date</label>
+                      <input
+                        type="date"
+                        value={plantingForm.date}
+                        onChange={(e) => setPlantingForm((f) => ({ ...f, date: e.target.value }))}
+                        className="w-full bg-[#0d1117] border border-[#2a3044] rounded px-2 py-1 text-xs text-[#e8edf5]"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] uppercase tracking-widest text-[#7b8aab] block mb-0.5">Notes</label>
+                      <input
+                        type="text"
+                        value={plantingForm.notes}
+                        onChange={(e) => setPlantingForm((f) => ({ ...f, notes: e.target.value }))}
+                        placeholder="optional"
+                        className="w-full bg-[#0d1117] border border-[#2a3044] rounded px-2 py-1 text-xs text-[#e8edf5] placeholder-[#4a5568]"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    disabled={!plantingForm.date || plantingSaving}
+                    onClick={async () => {
+                      if (!plantingForm.date) return;
+                      setPlantingSaving(true);
+                      try {
+                        await setPlantingDate(
+                          plantingForm.commodity,
+                          Number(plantingForm.year),
+                          plantingForm.date,
+                          plantingForm.notes || undefined,
+                        );
+                        const updated = await getPlantingDates();
+                        setPlantingDates(updated);
+                        setPlantingForm((f) => ({ ...f, date: "", notes: "" }));
+                      } finally {
+                        setPlantingSaving(false);
+                      }
+                    }}
+                    className="mt-2 px-4 py-1.5 text-xs bg-[#3b82f6] text-white rounded disabled:opacity-40 hover:bg-[#2563eb] transition-colors"
+                  >
+                    {plantingSaving ? "Saving…" : "Save"}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </>

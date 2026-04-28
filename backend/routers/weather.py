@@ -1,20 +1,33 @@
-"""Weather router — local station, regional conditions, GDU."""
+"""Weather router — local station, regional conditions, GDU, planting dates."""
 
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from farm_platform.feeds.gdu_calculator import get_gdu_history, get_gdu_status
 from farm_platform.storage.timescale import (
+    delete_planting_date,
     get_all_regional_history,
     get_latest_weather_local,
     get_latest_weather_regional,
+    get_planting_dates,
+    get_rain_totals,
     get_weather_local_history,
+    upsert_planting_date,
 )
 
 router = APIRouter(prefix="/api/weather", tags=["weather"])
 
 VALID_REGIONS = {"corn_belt", "mato_grosso", "parana", "pampas"}
+VALID_CROPS = {"corn", "beans"}
+
+
+class PlantingDateBody(BaseModel):
+    planted_date: date
+    notes: str | None = None
 
 
 def _row_to_dict_local(r) -> dict:
@@ -71,6 +84,11 @@ async def get_regional_weather(region: str) -> dict:
     }
 
 
+@router.get("/local/rain-totals")
+async def get_local_rain_totals() -> dict:
+    return await get_rain_totals()
+
+
 @router.get("/gdu")
 async def gdu_status() -> dict:
     corn, beans = await get_gdu_status("corn"), await get_gdu_status("beans")
@@ -97,3 +115,37 @@ async def regional_history(days: int = 180) -> list[dict]:
 @router.get("/gdu/history")
 async def gdu_history(days: int = 90) -> list[dict]:
     return await get_gdu_history(days)
+
+
+# ── Planting dates ────────────────────────────────────────────────────────────
+
+@router.get("/planting-dates")
+async def list_planting_dates() -> list[dict]:
+    rows = await get_planting_dates()
+    return [
+        {
+            "commodity": r["commodity"],
+            "year": r["year"],
+            "planted_date": r["planted_date"].isoformat(),
+            "notes": r["notes"],
+        }
+        for r in rows
+    ]
+
+
+@router.put("/planting-dates/{commodity}/{year}")
+async def set_planting_date(commodity: str, year: int, body: PlantingDateBody) -> dict:
+    if commodity not in VALID_CROPS:
+        raise HTTPException(status_code=400, detail=f"Invalid crop. Valid: {', '.join(sorted(VALID_CROPS))}")
+    await upsert_planting_date(
+        commodity=commodity,
+        year=year,
+        planted_date=body.planted_date,
+        notes=body.notes,
+    )
+    return {"commodity": commodity, "year": year, "planted_date": body.planted_date.isoformat()}
+
+
+@router.delete("/planting-dates/{commodity}/{year}", status_code=204)
+async def remove_planting_date(commodity: str, year: int) -> None:
+    await delete_planting_date(commodity, year)

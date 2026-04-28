@@ -6,9 +6,11 @@ import type {
   NepBar,
   NetPriceResponse,
   OhlcBar,
+  PlantingDate,
   Position,
   PositionCreate,
   PositionUpdate,
+  RainTotals,
   ScenarioRequest,
   ScenarioRow,
   TradingModeResponse,
@@ -199,4 +201,32 @@ export async function getRegionalHistory(days = 180): Promise<WeatherRegional[]>
 
 export async function getGduStatus(): Promise<GduStatus> {
   return request<GduStatus>("/api/weather/gdu");
+}
+
+export async function getRainTotals(): Promise<RainTotals> {
+  return request<RainTotals>("/api/weather/local/rain-totals");
+}
+
+// ── Planting dates ────────────────────────────────────────────────────────────
+
+export async function getPlantingDates(): Promise<PlantingDate[]> {
+  return request<PlantingDate[]>("/api/weather/planting-dates");
+}
+
+export async function setPlantingDate(
+  commodity: string,
+  year: number,
+  planted_date: string,
+  notes?: string,
+): Promise<PlantingDate> {
+  return request<PlantingDate>(`/api/weather/planting-dates/${commodity}/${year}`, {
+    method: "PUT",
+    body: JSON.stringify({ planted_date, notes }),
+  });
+}
+
+export async function deletePlantingDate(commodity: string, year: number): Promise<void> {
+  await request<void>(`/api/weather/planting-dates/${commodity}/${year}`, {
+    method: "DELETE",
+  });
 }

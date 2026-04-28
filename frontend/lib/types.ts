@@ -213,6 +213,18 @@ export interface GduStatus {
   beans: GduCommodity;
 }
 
+export interface RainTotals {
+  mtd_in: number | null;
+  ytd_in: number | null;
+}
+
+export interface PlantingDate {
+  commodity: string;
+  year: number;
+  planted_date: string;
+  notes: string | null;
+}
+
 // ── Analytics ─────────────────────────────────────────────────────────────────
 
 export interface BasisBar {

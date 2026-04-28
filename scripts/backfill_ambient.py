@@ -1,8 +1,8 @@
 """Back-fill historical Ambient Weather data.
 
 Fetches up to --days of 5-min data from the Ambient Weather API and
-inserts it into weather_station_local. Safe to re-run; duplicate
-timestamps are ignored (ON CONFLICT DO NOTHING).
+inserts it into weather_station_local. Checks existing DB coverage first
+and only fetches missing date ranges — safe to re-run multiple times.
 
 Rate limit: Ambient allows 1 req/sec. This script sleeps 1.1s between
 requests. A full 30-day backfill takes ~2 minutes.
@@ -28,7 +28,7 @@ import structlog
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from farm_platform.config import settings
-from farm_platform.storage.timescale import get_pool, close_pool, insert_weather_local
+from farm_platform.storage.timescale import fetch, get_pool, close_pool, insert_weather_local
 
 log = structlog.get_logger(__name__)
 
@@ -68,6 +68,14 @@ def _parse_record(d: dict) -> dict | None:
     )
 
 
+async def _get_oldest_local() -> datetime | None:
+    """Return the oldest timestamp in weather_station_local, or None if empty."""
+    rows = await fetch("SELECT MIN(time) AS oldest FROM weather_station_local")
+    if not rows or rows[0]["oldest"] is None:
+        return None
+    return rows[0]["oldest"]
+
+
 async def backfill(days: int, dry_run: bool) -> None:
     cfg = settings.ambient
     if not cfg.api_key or not cfg.app_key:
@@ -75,8 +83,23 @@ async def backfill(days: int, dry_run: bool) -> None:
         return
 
     mac = cfg.station_mac.upper()
-    cutoff_ms = int((datetime.now(tz=timezone.utc) - timedelta(days=days)).timestamp() * 1000)
-    end_date_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+    cutoff_dt = datetime.now(tz=timezone.utc) - timedelta(days=days)
+    cutoff_ms = int(cutoff_dt.timestamp() * 1000)
+
+    # Check what we already have and skip if fully covered
+    oldest_in_db = None if dry_run else await _get_oldest_local()
+    if oldest_in_db is not None:
+        oldest_aware = oldest_in_db if oldest_in_db.tzinfo else oldest_in_db.replace(tzinfo=timezone.utc)
+        if oldest_aware <= cutoff_dt:
+            print(f"Already have data back to {oldest_aware.date()} — nothing to fetch.")
+            log.info("backfill_already_covered", oldest=oldest_aware.isoformat(), cutoff_days=days)
+            return
+        # Only fetch data older than what we have
+        end_date_ms = int(oldest_aware.timestamp() * 1000) - 1
+        print(f"Existing data starts {oldest_aware.date()}. Fetching {cutoff_dt.date()} → {oldest_aware.date()} ...")
+    else:
+        end_date_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+        print(f"No existing data. Fetching up to {days} days ...")
 
     total_inserted = 0
     total_skipped = 0

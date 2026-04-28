@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 import asyncpg
 import structlog
@@ -231,6 +231,34 @@ async def get_weather_local_history(days: int = 7) -> list[asyncpg.Record]:
     )
 
 
+async def get_rain_totals() -> dict:
+    """Return month-to-date and year-to-date rain totals from stored daily readings.
+
+    Ambient's rain_daily resets to 0 at midnight local time, so the max value
+    per calendar day is the total for that day. We sum the per-day maxima.
+    """
+    row = await fetchrow(
+        """
+        SELECT
+          SUM(day_rain) FILTER (WHERE day >= date_trunc('month', NOW() AT TIME ZONE 'America/Chicago'))
+            AS mtd_rain,
+          SUM(day_rain) FILTER (WHERE day >= date_trunc('year',  NOW() AT TIME ZONE 'America/Chicago'))
+            AS ytd_rain
+        FROM (
+          SELECT
+            time::date AS day,
+            MAX(rain_daily) AS day_rain
+          FROM weather_station_local
+          GROUP BY time::date
+        ) daily
+        """
+    )
+    return {
+        "mtd_in": round(float(row["mtd_rain"]), 2) if row and row["mtd_rain"] is not None else None,
+        "ytd_in": round(float(row["ytd_rain"]), 2) if row and row["ytd_rain"] is not None else None,
+    }
+
+
 async def insert_weather_regional(
     *,
     time: datetime,
@@ -279,6 +307,52 @@ async def get_gdu_history(days: int = 180) -> list[asyncpg.Record]:
         ORDER BY day ASC
         """,
         str(days),
+    )
+
+
+# ── Planting dates ───────────────────────────────────────────────────────────
+
+async def get_planting_dates() -> list[asyncpg.Record]:
+    return await fetch(
+        "SELECT commodity, year, planted_date, notes FROM planting_dates ORDER BY year DESC, commodity ASC"
+    )
+
+
+async def get_planting_date(commodity: str, year: int) -> asyncpg.Record | None:
+    return await fetchrow(
+        "SELECT commodity, year, planted_date, notes FROM planting_dates WHERE commodity = $1 AND year = $2",
+        commodity,
+        year,
+    )
+
+
+async def upsert_planting_date(
+    *,
+    commodity: str,
+    year: int,
+    planted_date: date,
+    notes: str | None = None,
+) -> None:
+    await execute(
+        """
+        INSERT INTO planting_dates (commodity, year, planted_date, notes)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (commodity, year) DO UPDATE
+          SET planted_date = EXCLUDED.planted_date,
+              notes        = EXCLUDED.notes
+        """,
+        commodity,
+        year,
+        planted_date,
+        notes,
+    )
+
+
+async def delete_planting_date(commodity: str, year: int) -> None:
+    await execute(
+        "DELETE FROM planting_dates WHERE commodity = $1 AND year = $2",
+        commodity,
+        year,
     )
 
 

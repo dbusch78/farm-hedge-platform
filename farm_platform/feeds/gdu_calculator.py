@@ -5,6 +5,10 @@ Standard corn/bean GDU formula (base 50°F):
 
 The gdu_daily continuous aggregate handles the per-day computation.
 This module queries it and returns cumulative totals from planting date.
+
+Planting dates are stored in the planting_dates table (one row per commodity+year).
+Falls back to config defaults (PLANTING_DATE_CORN / PLANTING_DATE_BEANS env vars)
+if no DB record exists for the current year.
 """
 
 from __future__ import annotations
@@ -14,17 +18,27 @@ from datetime import date
 import structlog
 
 from farm_platform.config import settings
-from farm_platform.storage.timescale import fetch, fetchrow
+from farm_platform.storage.timescale import fetch, fetchrow, get_planting_date
 
 log = structlog.get_logger(__name__)
 
 
-async def get_gdu_status(commodity: str = "corn") -> dict:
-    planting = (
+async def _resolve_planting_date(commodity: str) -> date:
+    """Return planting date from DB for current year, or fall back to config."""
+    current_year = date.today().year
+    row = await get_planting_date(commodity, current_year)
+    if row is not None:
+        return row["planted_date"]
+    # Fall back to config default
+    return (
         settings.farm.planting_date_corn
         if commodity == "corn"
         else settings.farm.planting_date_beans
     )
+
+
+async def get_gdu_status(commodity: str = "corn") -> dict:
+    planting = await _resolve_planting_date(commodity)
 
     rows = await fetch(
         """

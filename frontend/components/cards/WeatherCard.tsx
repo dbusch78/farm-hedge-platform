@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getGduStatus, getLocalWeather, getRegionalWeather } from "@/lib/api";
-import type { GduStatus, WeatherLocal, WeatherRegional } from "@/lib/types";
+import { getGduStatus, getLocalWeather, getRainTotals, getRegionalWeather } from "@/lib/api";
+import type { GduStatus, RainTotals, WeatherLocal, WeatherRegional } from "@/lib/types";
 
 const COMPASS = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
 
@@ -36,6 +36,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 
 export default function WeatherCard() {
   const [local, setLocal] = useState<WeatherLocal | null>(null);
+  const [rain, setRain] = useState<RainTotals | null>(null);
   const [matoGrosso, setMatoGrosso] = useState<WeatherRegional | null>(null);
   const [pampas, setPampas] = useState<WeatherRegional | null>(null);
   const [gdu, setGdu] = useState<GduStatus | null>(null);
@@ -44,11 +45,13 @@ export default function WeatherCard() {
   useEffect(() => {
     Promise.allSettled([
       getLocalWeather(),
+      getRainTotals(),
       getRegionalWeather("mato_grosso"),
       getRegionalWeather("pampas"),
       getGduStatus(),
-    ]).then(([localRes, mgRes, pampasRes, gduRes]) => {
+    ]).then(([localRes, rainRes, mgRes, pampasRes, gduRes]) => {
       if (localRes.status === "fulfilled") setLocal(localRes.value);
+      if (rainRes.status === "fulfilled") setRain(rainRes.value);
       if (mgRes.status === "fulfilled") setMatoGrosso(mgRes.value);
       if (pampasRes.status === "fulfilled") setPampas(pampasRes.value);
       if (gduRes.status === "fulfilled") setGdu(gduRes.value);
@@ -135,6 +138,20 @@ export default function WeatherCard() {
             <Stat label="Barometer" value={fmt(local.baro_rel, 2, "\"")} />
             <Stat label="Pressure" value={local.baro_rel != null ? (local.baro_rel > 30 ? "High ↑" : local.baro_rel < 29.7 ? "Low ↓" : "Normal") : "—"} />
           </div>
+
+          {/* Rain accumulation row */}
+          {rain && (
+            <div className="grid grid-cols-2 gap-3 pt-1 border-t border-[#1e2535]">
+              <Stat
+                label="Rain — Month"
+                value={rain.mtd_in != null ? `${rain.mtd_in.toFixed(2)}"` : "—"}
+              />
+              <Stat
+                label="Rain — YTD"
+                value={rain.ytd_in != null ? `${rain.ytd_in.toFixed(2)}"` : "—"}
+              />
+            </div>
+          )}
         </>
       )}
 

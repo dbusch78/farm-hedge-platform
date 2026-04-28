@@ -84,6 +84,16 @@ SELECT create_hypertable('weather_regional', 'time', if_not_exists => TRUE);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_weather_regional_time_region ON weather_regional (time, region);
 CREATE INDEX IF NOT EXISTS idx_weather_regional_region_time ON weather_regional (region, time DESC);
 
+-- ── Planting dates (per crop, per year) ────────────────────────────────────
+-- Stores one row per (commodity, year). Used by GDU calculator.
+CREATE TABLE IF NOT EXISTS planting_dates (
+    commodity       VARCHAR(20)  NOT NULL,
+    year            SMALLINT     NOT NULL,
+    planted_date    DATE         NOT NULL,
+    notes           TEXT,
+    PRIMARY KEY (commodity, year)
+);
+
 -- ── GDU continuous aggregate ────────────────────────────────────────────────
 -- Requires at least one row in weather_station_local before this will materialize.
 CREATE MATERIALIZED VIEW IF NOT EXISTS gdu_daily
