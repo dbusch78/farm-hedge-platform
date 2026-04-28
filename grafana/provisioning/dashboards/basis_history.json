@@ -1,0 +1,92 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "id": 4307039451283456,
+  "links": [],
+  "panels": [
+    {
+      "gridPos": {
+        "h": 3,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "content": "Basis data populates once the elevator scraper is configured with RVC credentials (, ,  in ).",
+        "mode": "markdown"
+      },
+      "title": "Note",
+      "type": "text"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 5,
+            "gradientMode": "none",
+            "lineWidth": 2
+          },
+          "decimals": 4,
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 3
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "timescaledb"
+          },
+          "format": "time_series",
+          "rawSql": "SELECT\n  time,\n  cash_price AS \"Cash Price\",\n  futures_ref AS \"Futures Ref\",\n  basis AS \"Basis\"\nFROM cash_prices\nWHERE $__timeFilter(time) AND commodity = 'ZC'\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "ZC Cash vs Futures & Basis (\u00a2/bu)",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "1h",
+  "schemaVersion": 39,
+  "tags": [
+    "farm-platform"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-90d",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "Basis History",
+  "uid": "farm-basis",
+  "version": 1
+}

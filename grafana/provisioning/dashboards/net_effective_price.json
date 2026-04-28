@@ -1,0 +1,144 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "id": 4307039619055616,
+  "links": [],
+  "panels": [
+    {
+      "gridPos": {
+        "h": 3,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "content": "P&L / bu panel populates as the daily options snapshot job records data in . Futures price trend is live.",
+        "mode": "markdown"
+      },
+      "title": "Note",
+      "type": "text"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 5,
+            "gradientMode": "none",
+            "lineWidth": 2
+          },
+          "decimals": 4,
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 3
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "timescaledb"
+          },
+          "format": "time_series",
+          "rawSql": "SELECT time, close AS \"ZC Futures Close\"\nFROM futures_prices\nWHERE $__timeFilter(time) AND symbol = 'ZC=F'\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "ZC Futures Price",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 5,
+            "gradientMode": "none",
+            "lineWidth": 2
+          },
+          "decimals": 4,
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 3
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "timescaledb"
+          },
+          "format": "time_series",
+          "rawSql": "SELECT time, pnl_per_bu AS \"P&L / bu\"\nFROM options_snapshots\nWHERE $__timeFilter(time)\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "Options P&L per Bushel",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "5m",
+  "schemaVersion": 39,
+  "tags": [
+    "farm-platform"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "Net Effective Price",
+  "uid": "farm-nep",
+  "version": 1
+}

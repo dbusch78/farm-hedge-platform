@@ -1,0 +1,77 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "id": 4307039275122688,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 5,
+            "gradientMode": "none",
+            "lineWidth": 2
+          },
+          "decimals": 4,
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "timescaledb"
+          },
+          "format": "time_series",
+          "rawSql": "SELECT\n  time,\n  MAX(CASE WHEN symbol = 'ZC=F' THEN close END) AS \"ZC Corn\",\n  MAX(CASE WHEN symbol = 'ZS=F' THEN close END) AS \"ZS Soybeans\",\n  MAX(CASE WHEN symbol = 'ZW=F' THEN close END) AS \"ZW Wheat\"\nFROM futures_prices\nWHERE $__timeFilter(time)\nGROUP BY time\nORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "ZC / ZS / ZW Close Price",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "5m",
+  "schemaVersion": 39,
+  "tags": [
+    "farm-platform"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "Futures Prices",
+  "uid": "farm-futures",
+  "version": 1
+}
