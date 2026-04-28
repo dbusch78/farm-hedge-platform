@@ -47,13 +47,18 @@ async def pull_symbol(symbol: str) -> dict[str, Any] | None:
             log.warning("futures_feed_empty", symbol=symbol)
             return None
         row = hist.iloc[-1]
+        # yfinance returns CBOT grain futures in exchange cents (e.g. 473.75).
+        # Divide by 100 to store in dollars per bushel (e.g. 4.7375).
+        def _to_dollars(col: str) -> float | None:
+            return round(float(row[col]) / 100, 6) if col in row else None
+
         return {
             "time": datetime.now(tz=timezone.utc),
             "symbol": symbol,
-            "open": float(row["Open"]) if "Open" in row else None,
-            "high": float(row["High"]) if "High" in row else None,
-            "low": float(row["Low"]) if "Low" in row else None,
-            "close": float(row["Close"]) if "Close" in row else None,
+            "open":   _to_dollars("Open"),
+            "high":   _to_dollars("High"),
+            "low":    _to_dollars("Low"),
+            "close":  _to_dollars("Close"),
             "volume": int(row["Volume"]) if "Volume" in row else None,
             "stale": False,
         }
