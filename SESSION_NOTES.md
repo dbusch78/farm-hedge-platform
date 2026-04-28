@@ -25,6 +25,11 @@
   that sends email/Telegram notifications — no Grafana alerting needed. The `grafana/`
   directory is kept as archive only.
 
+- Milestone 2B complete: `/analytics` page with Futures Prices (candlestick),
+  Basis & Cash (multi-line), and Net Effective Price tabs. Backend analytics
+  router at `/api/analytics/*` with 4 endpoints. `AnalyticsLineChart` component
+  added. Analytics link in desktop nav and mobile hamburger.
+
 ### What comes next — Milestone 3 (Weather)
 - `farm_platform/feeds/ambient_feed.py` — Ambient Weather WebSocket + REST
 - `farm_platform/feeds/openmeteo_feed.py` — 4 regions (corn belt, MT/PR/pampas)
