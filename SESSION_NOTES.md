@@ -1,5 +1,53 @@
 # Session Notes
 
+## Session: 2026-04-28 (late) — Hedge display sprint (Tasks 1-3)
+
+### What was done
+
+**Task 1 — Options P&L fix:**
+- Backend: `options_pnl_per_bu` (intrinsic−premium, correct sign) and
+  `net_effective_vs_spot_per_bu` now in `NetPriceResponse`; Phase 2
+  `call_pnl` was computed but stripped from response — fixed
+- Frontend: both metrics shown; vs-spot colored amber (not red) with tooltip
+  explaining negative vs-spot is expected for Phase 2 calls
+- 18 regression tests pass
+
+**Task 2 — CME contract_month format:**
+- Pydantic `field_validator` on `PositionCreate.contract_month`:
+  `^Z[CS][FGHJKMNQUVXZ]\d{2}$`
+- `frontend/lib/cme.ts`: `cmeSymbolToLabel("ZCN26") → "Jul '26"`
+- All display labels derived dynamically; no hardcoded "Jul25" or "July ZC"
+  remain in live code (only in migration script's own docstring)
+- `scripts/migrate_contract_month.py`: idempotent audit-trail migration
+  with `--dry-run` flag
+
+**Task 3 — Live delta and coverage display:**
+- `frontend/lib/blackScholes.ts`: Black-76 |delta| via A&S normalCDF;
+  hardcoded IV ZC=22%, ZS=18%; `cmeSymbolToExpiry()` last-Friday-of-prev-month;
+  falls back to `delta_at_entry` on expired options or missing data
+- `PositionRow` now shows: Δ live/entry, Held/Target, Coverage% with
+  phase-aware tooltip (partial coverage is intentional strategy)
+
+### Backlog additions
+
+**Phase Transition Alerts: Roll & Close Recommendation Engine** (added to
+CLAUDE_CODE_BRIEF.md §Milestone 4 Phase Transition Alerts with full spec):
+- Phase 1 puts: roll-up alert when delta drifts + floor below market;
+  roll-down alert when deep ITM
+- Phase 2 calls: yellow/red two-stage take-profit-and-pivot alerts
+- High-water mark tracking (peak_pnl_per_bu + peak_pnl_date per position)
+- Configurable thresholds in YAML
+- Depends on Task 4 (position lifecycle) for status/exit fields
+
+### What comes next
+
+- Task 4: position lifecycle management (close/expire/edit/delete, status
+  field, realized P&L, audit history) — design review pending
+- Then: Milestone 4 AI agent layer, or Phase Transition Alerts if Task 4
+  done first
+
+---
+
 ## Session: 2026-04-28 (evening) — Milestone 3 complete
 
 ### What was done

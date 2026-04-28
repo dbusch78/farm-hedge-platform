@@ -1046,13 +1046,87 @@ Work through milestones in order. Each milestone should be fully working before 
 - [ ] Implement and test `platform/agents/news_filter.py` -- verify irrelevant stories are filtered
 - [ ] Implement and test `platform/agents/positioning_advisor.py` -- verify it synthesizes agents 1-4 and produces actionable output
 
-#### Phase Transition Alerts
-- [ ] Implement `platform/hedge/alerts.py`
-- [ ] Read operator-defined rules from YAML config file
-- [ ] Evaluate rules against current position state on schedule
-- [ ] Store triggered alerts to MongoDB
-- [ ] `GET /api/hedge/alerts` -- list active unacknowledged alerts
+#### Phase Transition Alerts: Roll & Close Recommendation Engine
+
+Surfaces recommended actions when a position has drifted from its original
+purpose OR has done its job and should be closed to free up capital.
+Builds on Task 3 (live Black-76 delta) and Task 4 (position lifecycle).
+
+##### Phase 1 (Puts) — Roll-Up Recommendation
+
+Fire when ALL are true:
+1. Delta drifted: `current_delta < 50% of delta_at_entry` OR `current_delta < 0.15`
+2. Floor materially below market: `current_futures - strike >= roll_threshold`
+   - ZC: 15¢  |  ZS: 35¢  (configurable in YAML)
+3. Meaningful time left: `days_to_expiry >= 30`
+
+Recommendation output:
+- Suggested new strike (nearest standard interval, ~10¢ below futures for ZC, ~25¢ for ZS)
+- Estimated sell-to-close value of current position
+- Estimated buy-to-open cost at suggested strike
+- Net roll cost $/bu and total $
+- Old effective floor vs new effective floor
+
+##### Phase 1 (Puts) — Roll-Down Recommendation (secondary)
+
+Fire when:
+1. `futures < strike` by 20¢+ (ZC) or 50¢+ (ZS)
+2. `current_delta > 0.80`
+
+Recommendation: close to lock in gain; optionally re-establish lower floor.
+
+##### Phase 2 (Calls) — Take-Profit-and-Pivot (two-stage)
+
+Philosophy: "Capturing 85-90% of the peak is the goal. Chasing 99th
+percentile prices is how farmers lose money."
+
+**Stage 1 — Yellow alert ("Begin evaluating")**
+
+Fire when ANY are true:
+- `days_to_expiry <= 60` AND position is profitable
+- `current_pnl >= 70% of peak_pnl_per_bu` (high-water mark)
+
+Message: "This position is approaching take-profit territory. At
+{current_pnl_per_bu}, you've captured {pct_of_high_water}% of this
+position's peak P&L. {days_to_expiry} days to expiry. Begin evaluating
+whether to close and pivot to new crop protection."
+
+**Stage 2 — Red alert ("Close and pivot now")**
+
+Fire when ANY are true:
+- `days_to_expiry <= 45` AND position is profitable
+- Position has retraced >20% from high-water mark
+- `days_to_expiry <= 60` AND `current_pnl >= 85% of peak_pnl_per_bu`
+
+Message: "Recommend closing this position. Current realized-if-closed
+P&L: {pnl}. {reason}. Capital can be redeployed into new crop protection
+(Dec ZC / Nov ZS puts)."
+
+Reason text by trigger:
+- Time: "Time decay is accelerating with {days} days to expiry."
+- Retracement: "Position has given back {pct}% from its peak P&L of {peak}."
+- Combined: "You've captured {pct}% of peak; further upside likely
+  outweighed by time decay risk."
+
+##### High-water mark tracking
+
+Each position gains: `peak_pnl_per_bu` + `peak_pnl_date` fields.
+Updated daily by APScheduler job: if current P&L > stored peak, update.
+Display on every Phase 2 card: "Peak: $X.XX/bu on Apr 12" + "Currently
+at 80% of peak" — visible even when no alert is firing.
+
+##### Checklist
+
+- [ ] Add `peak_pnl_per_bu` + `peak_pnl_date` fields to position schema
+- [ ] APScheduler job: daily P&L computation + high-water mark update
+- [ ] Implement `farm_platform/hedge/alerts.py` with trigger logic above
+- [ ] YAML config for thresholds (roll_threshold, time windows, pct triggers)
+- [ ] Evaluate rules against position state on schedule (APScheduler)
+- [ ] Store triggered alerts to MongoDB with level (yellow/red) + reason
+- [ ] `GET /api/hedge/alerts` -- active unacknowledged alerts
 - [ ] `POST /api/hedge/alerts/{id}/acknowledge` -- mark acknowledged
+- [ ] Alert badge / banner in hedge page UI (yellow/red styling)
+- [ ] Phase 2 position card: show peak P&L + capture % at all times
 
 #### FastAPI + Frontend
 - [ ] `GET /api/agents/runs` -- list recent runs with filters
