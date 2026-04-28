@@ -171,6 +171,26 @@ export interface OhlcBar {
   stale: boolean;
 }
 
+// ── Analytics ─────────────────────────────────────────────────────────────────
+
+export interface BasisBar {
+  time: string;
+  elevator: string;
+  commodity: string;
+  cash_price: number;
+  futures_ref: number | null;
+  basis: number | null;
+}
+
+export interface NepBar {
+  time: string;
+  position_id: string;
+  underlying_px: number;
+  net_eff_price: number | null;
+  pnl_per_bushel: number | null;
+  premium_paid: number | null;
+}
+
 // ── API error ─────────────────────────────────────────────────────────────────
 
 export interface ApiError {

@@ -25,6 +25,7 @@ export default function RootLayout({
               <div className="hidden sm:flex items-center gap-4 text-xs text-[#7b8aab]">
                 <a href="/" className="hover:text-[#e8edf5] transition-colors">Dashboard</a>
                 <a href="/hedge" className="hover:text-[#e8edf5] transition-colors">Hedge</a>
+                <a href="/analytics" className="hover:text-[#e8edf5] transition-colors">Analytics</a>
                 <a href="/agents" className="hover:text-[#e8edf5] transition-colors">Agents</a>
                 <a href="/journal" className="hover:text-[#e8edf5] transition-colors">Journal</a>
                 <a href="/weather" className="hover:text-[#e8edf5] transition-colors">Weather</a>

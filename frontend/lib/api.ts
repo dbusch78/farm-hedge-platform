@@ -1,6 +1,8 @@
 import type {
+  BasisBar,
   CashPrice,
   FuturesPrice,
+  NepBar,
   NetPriceResponse,
   OhlcBar,
   Position,
@@ -143,4 +145,33 @@ export async function getAgentRuns(
 
 export async function triggerAgentRun(agent: string): Promise<AgentRun> {
   return request<AgentRun>(`/api/agents/${agent}/run`, { method: "POST" });
+}
+
+// ── Analytics ─────────────────────────────────────────────────────────────────
+
+export async function getAnalyticsFuturesHistory(
+  symbol: string,
+  days = 365,
+): Promise<OhlcBar[]> {
+  return request<OhlcBar[]>(
+    `/api/analytics/futures-history?symbol=${encodeURIComponent(symbol)}&days=${days}`,
+  );
+}
+
+export async function getAnalyticsBasisHistory(
+  commodity: string,
+  days = 180,
+  elevator?: string,
+): Promise<BasisBar[]> {
+  const qs = new URLSearchParams({ commodity, days: String(days) });
+  if (elevator) qs.set("elevator", elevator);
+  return request<BasisBar[]>(`/api/analytics/basis-history?${qs}`);
+}
+
+export async function getAnalyticsNepHistory(days = 365): Promise<NepBar[]> {
+  return request<NepBar[]>(`/api/analytics/nep-history?days=${days}`);
+}
+
+export async function getElevatorNames(): Promise<string[]> {
+  return request<string[]>("/api/analytics/elevators");
 }

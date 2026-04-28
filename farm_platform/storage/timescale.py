@@ -132,6 +132,50 @@ async def get_latest_cash(elevator: str, commodity: str) -> asyncpg.Record | Non
     )
 
 
+async def get_basis_history(
+    commodity: str, days: int = 180, elevator: str | None = None
+) -> list[asyncpg.Record]:
+    if elevator:
+        return await fetch(
+            """
+            SELECT time, elevator, commodity, cash_price, futures_ref, basis
+            FROM cash_prices
+            WHERE commodity = $1
+              AND elevator = $2
+              AND time >= NOW() - ($3 || ' days')::INTERVAL
+            ORDER BY time ASC
+            """,
+            commodity, elevator, str(days),
+        )
+    return await fetch(
+        """
+        SELECT time, elevator, commodity, cash_price, futures_ref, basis
+        FROM cash_prices
+        WHERE commodity = $1
+          AND time >= NOW() - ($2 || ' days')::INTERVAL
+        ORDER BY time ASC
+        """,
+        commodity, str(days),
+    )
+
+
+async def get_nep_history(days: int = 365) -> list[asyncpg.Record]:
+    return await fetch(
+        """
+        SELECT time, position_id, underlying_px, net_eff_price, pnl_per_bushel, premium_paid
+        FROM options_snapshots
+        WHERE time >= NOW() - ($1 || ' days')::INTERVAL
+        ORDER BY time ASC
+        """,
+        str(days),
+    )
+
+
+async def get_elevator_names() -> list[str]:
+    rows = await fetch("SELECT DISTINCT elevator FROM cash_prices ORDER BY elevator")
+    return [r["elevator"] for r in rows]
+
+
 # ── Options snapshots ────────────────────────────────────────────────────────
 
 async def insert_options_snapshot(
