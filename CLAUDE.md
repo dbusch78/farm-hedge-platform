@@ -80,3 +80,46 @@ commit 625fc07. The bug survived because no test asserted unit correctness
 at the ingestion boundary.
 
 ---
+
+## Aggregation Across Multiple Positions
+
+When rolling up data across multiple positions of the same commodity or contract,
+use **group-by-and-aggregate** — never `.find()` or first-match. First-match
+silently drops additional positions and produces results that look correct on
+small data (one position per commodity) but break the moment a user has more
+than one position per commodity.
+
+### Required pattern: explicit aggregation with exposure-weighted averages
+
+For per-bushel metrics (P&L/bu, net effective price, premiums paid/bu):
+weight by **bushels held** (or equivalently `raw_contracts = expected_bushels / 5000`).
+
+For total-dollar/count metrics (`delta_adj_contracts`, `raw_contracts`): sum.
+
+```python
+total_raw = sum(r["raw_contracts"] for r in group)
+wavg_pnl = sum(r["options_pnl_per_bu"] * r["raw_contracts"] for r in group) / total_raw
+```
+
+### Why contract-count weighting matters
+
+A 3-contract position should carry 3× the weight of a 1-contract position when
+computing blended per-bushel P&L. Equal weights (simple average) are wrong in
+the same way as weighting portfolio P&L by number of positions instead of
+dollar exposure.
+
+### Aggregation bugs hide behind similar inputs
+
+This bug was invisible on the corn card because both corn legs had similar P&L
+(~+$0.07/bu each). It revealed itself on beans because one leg was deep ITM
+(+$1.22/bu) and the other barely ITM (-$0.23/bu). Design regression tests with
+deliberately divergent inputs so that dropping any position produces a noticeably
+wrong aggregate.
+
+### History
+
+Fixed in commit 39651f5 (Issue #8). The backend `/net-price` endpoint appended
+one row per position; the frontend's `.find()` picked only the first ZS match,
+showing -$0.20/bu instead of the correct blended +$0.88/bu across two bean positions.
+
+---
