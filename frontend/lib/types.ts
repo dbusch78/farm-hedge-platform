@@ -171,6 +171,48 @@ export interface OhlcBar {
   stale: boolean;
 }
 
+// ── Weather ───────────────────────────────────────────────────────────────────
+
+export interface WeatherLocal {
+  time: string;
+  temp_f: number | null;
+  humidity: number | null;
+  rain_hourly: number | null;
+  rain_daily: number | null;
+  wind_speed: number | null;
+  wind_dir: number | null;
+  solar_rad: number | null;
+  baro_rel: number | null;
+  wind_gust_mph: number | null;
+  dew_point_f: number | null;
+  uv_index: number | null;
+  lightning_day: number | null;
+  lightning_distance_mi: number | null;
+}
+
+export interface WeatherRegional {
+  time: string;
+  region: string;
+  temp_c: number | null;
+  precip_mm: number | null;
+  soil_moisture: number | null;
+  et0: number | null;
+  wind_speed_10m: number | null;
+}
+
+export interface GduCommodity {
+  commodity: string;
+  planting_date: string;
+  days_tracked: number;
+  cumulative_gdu: number;
+  today_gdu: number;
+}
+
+export interface GduStatus {
+  corn: GduCommodity;
+  beans: GduCommodity;
+}
+
 // ── Analytics ─────────────────────────────────────────────────────────────────
 
 export interface BasisBar {

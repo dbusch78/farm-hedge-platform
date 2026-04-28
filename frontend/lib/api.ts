@@ -2,6 +2,7 @@ import type {
   BasisBar,
   CashPrice,
   FuturesPrice,
+  GduStatus,
   NepBar,
   NetPriceResponse,
   OhlcBar,
@@ -12,6 +13,8 @@ import type {
   ScenarioRow,
   TradingModeResponse,
   AgentRun,
+  WeatherLocal,
+  WeatherRegional,
 } from "./types";
 
 // Server-side: fetch directly to the backend container via Docker service name.
@@ -174,4 +177,22 @@ export async function getAnalyticsNepHistory(days = 365): Promise<NepBar[]> {
 
 export async function getElevatorNames(): Promise<string[]> {
   return request<string[]>("/api/analytics/elevators");
+}
+
+// ── Weather ───────────────────────────────────────────────────────────────────
+
+export async function getLocalWeather(): Promise<WeatherLocal> {
+  return request<WeatherLocal>("/api/weather/local");
+}
+
+export async function getLocalWeatherHistory(days = 7): Promise<WeatherLocal[]> {
+  return request<WeatherLocal[]>(`/api/weather/local/history?days=${days}`);
+}
+
+export async function getRegionalWeather(region: string): Promise<WeatherRegional> {
+  return request<WeatherRegional>(`/api/weather/regional/${region}`);
+}
+
+export async function getGduStatus(): Promise<GduStatus> {
+  return request<GduStatus>("/api/weather/gdu");
 }

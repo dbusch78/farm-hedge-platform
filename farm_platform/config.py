@@ -35,6 +35,9 @@ class AmbientSettings(BaseSettings):
 
     api_key: str = ""
     app_key: str = ""
+    # MAC of the outdoor farm station (ignore other devices/channels in account)
+    station_mac: str = "C4:5B:BE:5D:33:FE"
+    poll_interval_min: int = 5
 
 
 class AlpacaSettings(BaseSettings):

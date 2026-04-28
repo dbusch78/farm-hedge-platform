@@ -178,6 +178,100 @@ async def get_elevator_names() -> list[str]:
 
 # ── Options snapshots ────────────────────────────────────────────────────────
 
+async def insert_weather_local(
+    *,
+    time: datetime,
+    temp_f: float | None,
+    humidity: float | None,
+    rain_hourly: float | None,
+    rain_daily: float | None,
+    wind_speed: float | None,
+    wind_dir: int | None,
+    solar_rad: float | None,
+    baro_rel: float | None,
+    soil_temp_1: float | None = None,
+    wind_gust_mph: float | None = None,
+    dew_point_f: float | None = None,
+    uv_index: int | None = None,
+    lightning_day: int | None = None,
+    lightning_distance_mi: float | None = None,
+) -> None:
+    await execute(
+        """
+        INSERT INTO weather_station_local
+            (time, temp_f, humidity, rain_hourly, rain_daily, wind_speed, wind_dir,
+             solar_rad, baro_rel, soil_temp_1, wind_gust_mph, dew_point_f, uv_index,
+             lightning_day, lightning_distance_mi)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        ON CONFLICT DO NOTHING
+        """,
+        time, temp_f, humidity, rain_hourly, rain_daily, wind_speed, wind_dir,
+        solar_rad, baro_rel, soil_temp_1, wind_gust_mph, dew_point_f, uv_index,
+        lightning_day, lightning_distance_mi,
+    )
+
+
+async def get_latest_weather_local() -> asyncpg.Record | None:
+    return await fetchrow(
+        "SELECT * FROM weather_station_local ORDER BY time DESC LIMIT 1"
+    )
+
+
+async def get_weather_local_history(days: int = 7) -> list[asyncpg.Record]:
+    return await fetch(
+        """
+        SELECT time, temp_f, humidity, rain_hourly, rain_daily, wind_speed,
+               wind_dir, solar_rad, baro_rel, wind_gust_mph, dew_point_f,
+               uv_index, lightning_day, lightning_distance_mi
+        FROM weather_station_local
+        WHERE time >= NOW() - ($1 || ' days')::INTERVAL
+        ORDER BY time ASC
+        """,
+        str(days),
+    )
+
+
+async def insert_weather_regional(
+    *,
+    time: datetime,
+    region: str,
+    temp_c: float | None,
+    precip_mm: float | None,
+    soil_moisture: float | None,
+    et0: float | None,
+    wind_speed_10m: float | None,
+) -> None:
+    await execute(
+        """
+        INSERT INTO weather_regional (time, region, temp_c, precip_mm, soil_moisture, et0, wind_speed_10m)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT DO NOTHING
+        """,
+        time, region, temp_c, precip_mm, soil_moisture, et0, wind_speed_10m,
+    )
+
+
+async def get_latest_weather_regional(region: str) -> asyncpg.Record | None:
+    return await fetchrow(
+        "SELECT * FROM weather_regional WHERE region = $1 ORDER BY time DESC LIMIT 1",
+        region,
+    )
+
+
+async def get_gdu_history(days: int = 180) -> list[asyncpg.Record]:
+    return await fetch(
+        """
+        SELECT day, avg_temp_f, gdu
+        FROM gdu_daily
+        WHERE day >= NOW() - ($1 || ' days')::INTERVAL
+        ORDER BY day ASC
+        """,
+        str(days),
+    )
+
+
+# ── Options snapshots ────────────────────────────────────────────────────────
+
 async def insert_options_snapshot(
     *,
     time: datetime,

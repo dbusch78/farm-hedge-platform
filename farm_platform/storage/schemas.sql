@@ -45,18 +45,30 @@ CREATE INDEX IF NOT EXISTS idx_snapshots_position_time ON options_snapshots (pos
 
 -- ── On-farm weather station (Ambient Weather) ───────────────────────────────
 CREATE TABLE IF NOT EXISTS weather_station_local (
-    time            TIMESTAMPTZ NOT NULL,
-    temp_f          NUMERIC(5,2),
-    humidity        NUMERIC(5,2),
-    rain_hourly     NUMERIC(6,3),
-    rain_daily      NUMERIC(6,3),
-    wind_speed      NUMERIC(5,2),
-    wind_dir        SMALLINT,
-    solar_rad       NUMERIC(7,2),
-    baro_rel        NUMERIC(7,3),
-    soil_temp_1     NUMERIC(5,2)
+    time                 TIMESTAMPTZ NOT NULL,
+    temp_f               NUMERIC(5,2),
+    humidity             NUMERIC(5,2),
+    rain_hourly          NUMERIC(6,3),
+    rain_daily           NUMERIC(6,3),
+    wind_speed           NUMERIC(5,2),
+    wind_dir             SMALLINT,
+    solar_rad            NUMERIC(7,2),
+    baro_rel             NUMERIC(7,3),
+    soil_temp_1          NUMERIC(5,2),
+    wind_gust_mph        NUMERIC(5,2),
+    dew_point_f          NUMERIC(5,2),
+    uv_index             SMALLINT,
+    lightning_day        SMALLINT,
+    lightning_distance_mi NUMERIC(5,2)
 );
 SELECT create_hypertable('weather_station_local', 'time', if_not_exists => TRUE);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_weather_local_time ON weather_station_local (time);
+-- Migrations: add new columns to existing installs
+ALTER TABLE weather_station_local ADD COLUMN IF NOT EXISTS wind_gust_mph        NUMERIC(5,2);
+ALTER TABLE weather_station_local ADD COLUMN IF NOT EXISTS dew_point_f          NUMERIC(5,2);
+ALTER TABLE weather_station_local ADD COLUMN IF NOT EXISTS uv_index             SMALLINT;
+ALTER TABLE weather_station_local ADD COLUMN IF NOT EXISTS lightning_day        SMALLINT;
+ALTER TABLE weather_station_local ADD COLUMN IF NOT EXISTS lightning_distance_mi NUMERIC(5,2);
 
 -- ── Regional weather (Open-Meteo) ───────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS weather_regional (
@@ -69,6 +81,7 @@ CREATE TABLE IF NOT EXISTS weather_regional (
     wind_speed_10m  NUMERIC(5,2)
 );
 SELECT create_hypertable('weather_regional', 'time', if_not_exists => TRUE);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_weather_regional_time_region ON weather_regional (time, region);
 CREATE INDEX IF NOT EXISTS idx_weather_regional_region_time ON weather_regional (region, time DESC);
 
 -- ── GDU continuous aggregate ────────────────────────────────────────────────

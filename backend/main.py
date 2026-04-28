@@ -15,11 +15,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.routers import analytics as analytics_router
 from backend.routers import hedge as hedge_router
+from backend.routers import weather as weather_router
 from backend.websocket import on_new_price
 from backend.websocket import router as ws_router
 from farm_platform.config import settings
+from farm_platform.feeds.ambient_feed import run_once as ambient_run_once
 from farm_platform.feeds.elevator_scraper import run_once as elevator_run_once
 from farm_platform.feeds.futures_feed import register_price_callback, run_once
+from farm_platform.feeds.openmeteo_feed import run_once as openmeteo_run_once
 from farm_platform.storage.mongo import ensure_collections
 from farm_platform.storage.timescale import close_pool, get_pool
 
@@ -42,6 +45,7 @@ app.add_middleware(
 # ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(hedge_router.router)
 app.include_router(analytics_router.router)
+app.include_router(weather_router.router)
 app.include_router(ws_router)
 
 
@@ -74,11 +78,31 @@ async def startup() -> None:
         elevator_run_once, "interval", hours=elevator_interval, id="elevator_scraper"
     )
 
+    ambient_interval = settings.ambient.poll_interval_min
+    _scheduler.add_job(
+        ambient_run_once,
+        "interval",
+        minutes=ambient_interval,
+        id="ambient_feed",
+        next_run_time=datetime.now(tz=timezone.utc),
+    )
+
+    openmeteo_interval = settings.schedule.weather_feed_interval_hrs
+    _scheduler.add_job(
+        openmeteo_run_once,
+        "interval",
+        hours=openmeteo_interval,
+        id="openmeteo_feed",
+        next_run_time=datetime.now(tz=timezone.utc),
+    )
+
     _scheduler.start()
     log.info(
         "scheduler_started",
         futures_interval_min=interval,
         elevator_interval_hrs=elevator_interval,
+        ambient_interval_min=ambient_interval,
+        openmeteo_interval_hrs=openmeteo_interval,
     )
 
 
