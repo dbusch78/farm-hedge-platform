@@ -70,8 +70,8 @@ async def update_cash_sale_endpoint(
                 cash_sale_id=sale_id,
                 action="UPDATE",
                 field_changed=field,
-                before_value=json.dumps(old_val),
-                after_value=json.dumps(new_val),
+                before_value=_json(old_val),
+                after_value=_json(new_val),
             )
 
     # Recompute derived fields if any inputs changed
@@ -181,6 +181,11 @@ async def get_tax_summary(year: int = TAX_YEAR) -> dict[str, Any]:
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _json(val: Any) -> str:
+    """json.dumps that handles datetime by converting to ISO string."""
+    return json.dumps(val, default=lambda o: o.isoformat() if hasattr(o, "isoformat") else str(o))
+
 
 def _enrich_cash_sale(doc: dict[str, Any]) -> dict[str, Any]:
     """Compute gross/net amounts from stored fields if not already present."""
