@@ -16,6 +16,7 @@ export default function CashSaleEditor({ sale }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
+    sale_date: sale.sale_date ?? "",
     delivery_location: sale.delivery_location ?? "",
     selling_entity: sale.selling_entity ?? "",
     contract_settlement_id: sale.contract_settlement_id ?? "",
@@ -33,6 +34,7 @@ export default function CashSaleEditor({ sale }: Props) {
     startTransition(async () => {
       try {
         await updateCashSale(sale.id, {
+          sale_date: form.sale_date || undefined,
           delivery_location: form.delivery_location || null,
           selling_entity: form.selling_entity || null,
           contract_settlement_id: form.contract_settlement_id || null,
@@ -56,7 +58,16 @@ export default function CashSaleEditor({ sale }: Props) {
     return (
       <>
         <tr className="bg-[#0d111790] text-[#e8edf5]">
-          <td className={cellCls}>{sale.sale_date}</td>
+          <td className={cellCls}>
+            <input
+              name="sale_date"
+              type="date"
+              value={form.sale_date}
+              onChange={handleChange}
+              className={inputCls}
+              style={{ width: 120 }}
+            />
+          </td>
           <td className={cellCls}>{sale.bushels.toLocaleString()}</td>
           <td className={cellCls}>${sale.cash_price_per_bu.toFixed(4)}</td>
           <td className={cellCls}>${sale.gross_amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
