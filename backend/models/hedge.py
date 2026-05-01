@@ -55,15 +55,25 @@ class PositionUpdate(BaseModel):
     notes: str | None = None
 
 
+_CLOSE_REASONS = {"phase_transition", "profit_take", "stop", "roll", "expiry", "manual"}
+
+
 class CloseRequest(BaseModel):
     exit_price_per_bu: float
+    close_reason: str = "manual"
     exit_date: str | None = None   # defaults to now() server-side if omitted
     notes: str = ""
 
+    @field_validator("close_reason")
+    @classmethod
+    def validate_close_reason(cls, v: str) -> str:
+        if v not in _CLOSE_REASONS:
+            raise ValueError(f"close_reason must be one of {sorted(_CLOSE_REASONS)}, got {v!r}")
+        return v
+
 
 class ExpireRequest(BaseModel):
-    exit_price_per_bu: float = 0.0   # 0.00 = expired worthless
-    exit_date: str | None = None
+    exit_date: str | None = None   # defaults to now() server-side if omitted
 
 
 class ScenarioRequest(BaseModel):
@@ -101,8 +111,11 @@ class PositionResponse(BaseModel):
     status: str = "ACTIVE"
     exit_price_per_bu: float | None = None
     exit_date: str | None = None
-    exit_reason: str | None = None
+    exit_reason: str | None = None          # legacy field — new docs use close_reason
+    close_reason: str | None = None
     realized_pnl_per_bu: float | None = None
+    realized_pnl_total: float | None = None
+    parent_position_id: str | None = None
     notes: str = ""
     # Tax classification
     tax_treatment: str | None = None

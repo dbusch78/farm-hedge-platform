@@ -53,6 +53,15 @@ function ActionBtn({
 
 // ── Close form ────────────────────────────────────────────────────────────────
 
+const CLOSE_REASON_LABELS: Record<string, string> = {
+  profit_take:       "Profit take",
+  phase_transition:  "Phase transition (puts → calls)",
+  roll:              "Roll to new contract",
+  stop:              "Stop / cut loss",
+  expiry:            "Expired",
+  manual:            "Other / manual",
+};
+
 function CloseForm({
   pos,
   onSuccess,
@@ -63,6 +72,7 @@ function CloseForm({
   onCancel: () => void;
 }) {
   const [exitPrice, setExitPrice] = useState("");
+  const [closeReason, setCloseReason] = useState("manual");
   const [exitDate, setExitDate] = useState(today());
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +87,7 @@ function CloseForm({
       try {
         await closePosition(pos.id, {
           exit_price_per_bu: price,
+          close_reason: closeReason,
           exit_date: new Date(exitDate).toISOString(),
           notes,
         });
@@ -101,6 +112,13 @@ function CloseForm({
           <input type="date" value={exitDate} onChange={e => setExitDate(e.target.value)} required className={INPUT} />
         </FormRow>
       </div>
+      <FormRow label="Reason">
+        <select value={closeReason} onChange={e => setCloseReason(e.target.value)} className={INPUT}>
+          {Object.entries(CLOSE_REASON_LABELS).map(([val, label]) => (
+            <option key={val} value={val}>{label}</option>
+          ))}
+        </select>
+      </FormRow>
       <FormRow label="Notes (optional)">
         <input type="text" value={notes} onChange={e => setNotes(e.target.value)}
           placeholder="Sold ahead of expiry…" className={INPUT} />
@@ -131,20 +149,16 @@ function ExpireForm({
   onSuccess: () => void;
   onCancel: () => void;
 }) {
-  const [exitPrice, setExitPrice] = useState("0.00");
   const [exitDate, setExitDate] = useState(today());
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const price = parseFloat(exitPrice);
-    if (isNaN(price) || price < 0) { setError("Enter a valid exit price"); return; }
     setError(null);
     startTransition(async () => {
       try {
         await expirePosition(pos.id, {
-          exit_price_per_bu: price,
           exit_date: new Date(exitDate).toISOString(),
         });
         onSuccess();
@@ -154,26 +168,21 @@ function ExpireForm({
     });
   }
 
-  const realized = parseFloat(exitPrice) - pos.premium_paid_per_bu;
+  const realized = -pos.premium_paid_per_bu;
 
   return (
     <form onSubmit={handleSubmit} className="bg-[#0d1117] rounded border border-[#2a3044] p-3 space-y-3">
-      <p className="text-xs font-semibold text-[#e8edf5]">Mark expired</p>
-      <div className="grid grid-cols-2 gap-2">
-        <FormRow label="Exit price ($/bu)">
-          <input type="number" step="0.001" min="0" value={exitPrice}
-            onChange={e => setExitPrice(e.target.value)} required className={INPUT} />
-        </FormRow>
-        <FormRow label="Expiry date">
-          <input type="date" value={exitDate} onChange={e => setExitDate(e.target.value)} required className={INPUT} />
-        </FormRow>
-      </div>
-      {!isNaN(realized) && (
-        <p className={`text-xs tabular-nums ${realized >= 0 ? "text-[#22c55e]" : "text-[#ef4444]"}`}>
-          Realized P&L: {realized >= 0 ? "+" : ""}${realized.toFixed(3)}/bu
-          &nbsp;({realized >= 0 ? "+" : ""}${(realized * pos.expected_bushels).toLocaleString(undefined, { maximumFractionDigits: 0 })})
-        </p>
-      )}
+      <p className="text-xs font-semibold text-[#e8edf5]">Mark expired worthless</p>
+      <p className="text-xs text-[#7b8aab]">
+        Option expired with no value. Realized P&L = -(premium paid).
+      </p>
+      <FormRow label="Expiry date">
+        <input type="date" value={exitDate} onChange={e => setExitDate(e.target.value)} required className={INPUT} />
+      </FormRow>
+      <p className="text-xs tabular-nums text-[#ef4444]">
+        Realized P&L: ${realized.toFixed(3)}/bu
+        &nbsp;(${(realized * pos.expected_bushels).toLocaleString(undefined, { maximumFractionDigits: 0 })})
+      </p>
       {error && <p className="text-xs text-[#ef4444]">{error}</p>}
       <div className="flex gap-2">
         <ActionBtn label={isPending ? "Saving…" : "Confirm expire"} onClick={() => {}} variant="confirm" disabled={isPending} />
@@ -302,7 +311,7 @@ function DeleteConfirm({
   return (
     <div className="bg-[#0d1117] rounded border border-[#ef444440] p-3 space-y-2">
       <p className="text-xs text-[#ef4444]">
-        ⚠ This removes the position from all calculations. The record is retained in the database for audit purposes.
+        ⚠ This permanently deletes the position. It cannot be recovered.
       </p>
       {error && <p className="text-xs text-[#ef4444]">{error}</p>}
       <div className="flex gap-2">

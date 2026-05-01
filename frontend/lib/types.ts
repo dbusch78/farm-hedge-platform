@@ -25,8 +25,11 @@ export interface Position {
   status: PositionStatus;
   exit_price_per_bu: number | null;
   exit_date: string | null;
-  exit_reason: string | null;
+  exit_reason: string | null;          // legacy — new docs use close_reason
+  close_reason: string | null;
   realized_pnl_per_bu: number | null;
+  realized_pnl_total: number | null;
+  parent_position_id: string | null;
   notes: string;
   // Tax classification
   tax_treatment?: string | null;
@@ -72,12 +75,12 @@ export interface PositionUpdate {
 
 export interface CloseRequest {
   exit_price_per_bu: number;
+  close_reason: string;
   exit_date?: string;
   notes?: string;
 }
 
 export interface ExpireRequest {
-  exit_price_per_bu?: number;
   exit_date?: string;
 }
 

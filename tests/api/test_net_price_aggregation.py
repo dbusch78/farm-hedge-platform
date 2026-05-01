@@ -80,6 +80,32 @@ ZC_CALL = {
 
 ZC_FUTURES = {"close": 4.72, "stale": False}
 
+# A CLOSED position — should contribute realized P&L, not mark-to-market.
+ZS_CLOSED = {
+    "commodity": "ZS",
+    "phase": 1,
+    "strike": 10.50,
+    "premium_paid_per_bu": 0.30,
+    "expected_bushels": 10_000,
+    "delta_at_entry": 0.40,
+    "cash_sale_price": None,
+    "status": "CLOSED",
+    "realized_pnl_per_bu": 0.45,   # locked at close time
+    "realized_pnl_total": 4_500.0,
+}
+
+# Same commodity/phase but ACTIVE — mixed active + closed group.
+ZS_PUT_ACTIVE = {
+    "commodity": "ZS",
+    "phase": 1,
+    "strike": 10.50,
+    "premium_paid_per_bu": 0.30,
+    "expected_bushels": 10_000,
+    "delta_at_entry": 0.40,
+    "cash_sale_price": None,
+    "status": "ACTIVE",
+}
+
 
 @pytest.mark.asyncio
 async def test_single_row_returned_per_commodity_phase() -> None:
@@ -195,3 +221,58 @@ async def test_puts_and_calls_never_blended_in_same_commodity() -> None:
     assert put_row["options_pnl_per_bu"] < 0, "OTM put should have negative P&L"
     # Call P&L: max(4.72 - 4.50, 0) - 0.08 = 0.14 (ITM)
     assert call_row["options_pnl_per_bu"] > 0, "ITM call should have positive P&L"
+
+
+@pytest.mark.asyncio
+async def test_closed_position_uses_realized_pnl_not_mark_to_market() -> None:
+    """A CLOSED position must contribute realized_pnl_per_bu to the rollup,
+    not a live calc_phase1 result.
+
+    ZS_CLOSED: realized_pnl_per_bu = +$0.45/bu (locked at close).
+    If the rollup used mark-to-market instead, it would compute
+    put_intrinsic(10.50 - 11.87, 0) - 0.30 = -0.30 (OTM) — clearly wrong.
+    """
+    with (
+        patch("backend.routers.hedge.get_all_positions", new_callable=AsyncMock, return_value=[ZS_CLOSED]),
+        patch("backend.routers.hedge.get_latest_futures", new_callable=AsyncMock, return_value=FAKE_LATEST),
+    ):
+        result = await get_net_prices()
+
+    assert len(result) == 1
+    row = result[0]
+    assert row["commodity"] == "ZS"
+    assert abs(row["options_pnl_per_bu"] - 0.45) < 0.001, (
+        f"Closed position should use realized P&L +$0.45/bu, got {row['options_pnl_per_bu']:.3f}. "
+        "If this shows -0.30, the rollup is running mark-to-market on a closed position."
+    )
+
+
+@pytest.mark.asyncio
+async def test_mixed_active_and_closed_weighted_by_contracts() -> None:
+    """Active (unrealized) and closed (realized) positions in the same group
+    must be weight-averaged by raw_contracts.
+
+    ZS_PUT_ACTIVE: 10,000 bu (2 raw), live P&L ≈ -0.30/bu (OTM put at 11.87)
+    ZS_CLOSED:     10,000 bu (2 raw), realized P&L = +0.45/bu
+    Weighted blend: (2 × -0.30 + 2 × 0.45) / 4 = +0.075/bu
+    """
+    with (
+        patch("backend.routers.hedge.get_all_positions", new_callable=AsyncMock,
+              return_value=[ZS_PUT_ACTIVE, ZS_CLOSED]),
+        patch("backend.routers.hedge.get_latest_futures", new_callable=AsyncMock,
+              return_value=FAKE_LATEST),
+    ):
+        result = await get_net_prices()
+
+    zs_rows = [r for r in result if r["commodity"] == "ZS" and r["phase"] == 1]
+    assert len(zs_rows) == 1, "Active + closed same group must collapse to one row"
+    row = zs_rows[0]
+
+    # raw_contracts: 2.0 (active) + 2.0 (closed) = 4.0
+    assert abs(row["raw_contracts"] - 4.0) < 0.01, (
+        f"raw_contracts should be 4.0, got {row['raw_contracts']}"
+    )
+    # blended P&L: (2×−0.30 + 2×0.45) / 4 = +0.075
+    assert -0.05 < row["options_pnl_per_bu"] < 0.15, (
+        f"Blended P&L should be ≈+$0.075/bu, got {row['options_pnl_per_bu']:.3f}"
+    )

@@ -41,10 +41,70 @@ CLAUDE_CODE_BRIEF.md §Milestone 4 Phase Transition Alerts with full spec):
 
 ### What comes next
 
-- Task 4: position lifecycle management (close/expire/edit/delete, status
-  field, realized P&L, audit history) — design review pending
-- Then: Milestone 4 AI agent layer, or Phase Transition Alerts if Task 4
-  done first
+- Task 4: position lifecycle management — design locked (see below)
+- Task 4 ships before any Milestone 4 agent work
+- Then: Phase Transition Alerts, then full Milestone 4 agent infrastructure
+
+---
+
+## Session: 2026-04-30 — Task 4 design locked
+
+### Design decisions
+
+**Schema additions to position documents:**
+- `status`: enum `active` | `closed` | `expired`
+  - `closed` = sold before expiry; `closed_price` is set
+  - `expired` = held to expiration worthless; `closed_price` is null
+  - Kept separate because P&L math differs; calculator must not infer
+- `closed_date`: date the position left active status
+- `closed_price`: nullable float, only set when status is `closed`
+- `close_reason`: enum string — `phase_transition`, `profit_take`, `stop`, `roll`, `expiry`, `manual`
+- `realized_pnl_per_bu`: per-bushel realized P&L, feeds net price calc
+- `realized_pnl_total`: total dollar realized P&L, for tax and ledger
+  - Both stored at close time; backfilling later is painful
+- `parent_position_id`: nullable FK to prior position (for rolls)
+  - Net price calc must chain so rolled position's realized P&L follows through
+  - Schema-only for now; no UI surface yet
+
+**Endpoints:**
+- Close position — requires exit price + close reason
+- Mark expired — no exit price; manual trigger or auto on expiry date
+- Edit position — allowed now; will be locked once agent writes positions
+- Delete position — hard delete, personal use
+
+**UI changes:**
+- Close button on active positions
+- Filter closed/expired out of default view; toggle to show them
+- Display realized P&L per bushel and total dollars on closed positions
+
+**Explicitly deferred:**
+- Audit history log (nothing reads from it yet)
+- Partial closes (close all; open smaller if needed)
+- Rolls as first-class action (use parent_position_id linkage; dedicated roll workflow later)
+
+### What was implemented (2026-04-30)
+
+**Backend:**
+- `backend/models/hedge.py`: `CloseRequest` gets `close_reason` (validated enum); `ExpireRequest` simplified (no exit price); `PositionResponse` gets `close_reason`, `realized_pnl_total`, `parent_position_id`
+- `farm_platform/hedge/tracker.py`: `close_position_with_pnl` accepts `close_reason`, stores `realized_pnl_total`; `expire_position` always uses `close_reason="expiry"`, no exit price param; `patch_position` rejects edits on non-active positions; `soft_delete_position` replaced by `delete_position` (hard delete)
+- `farm_platform/storage/mongo.py`: added `delete_position_hard`
+- `backend/routers/hedge.py`: endpoints wired to new tracker signatures; `get_net_prices` now fetches all non-deleted positions — ACTIVE use unrealized P&L, CLOSED/EXPIRED use `realized_pnl_per_bu`; futures lookups batched by commodity
+
+**Frontend:**
+- `frontend/lib/types.ts`: `Position` gets `close_reason`, `realized_pnl_total`, `parent_position_id`; `CloseRequest` gets `close_reason`; `ExpireRequest` simplified
+- `frontend/components/trading/PositionActions.tsx`: `CloseForm` adds close reason dropdown; `ExpireForm` removes exit price (expire = always worthless); delete warning updated to hard-delete language
+- `frontend/components/trading/ClosedPositionsPanel.tsx`: new client component with "Show/hide closed (N)" toggle and `ClosedPositionRow` that shows `close_reason` label and realized P&L
+- `frontend/app/hedge/page.tsx`: uses `ClosedPositionsPanel` instead of inline closed list; `ClosedPositionRow` updated to read `close_reason` with fallback to legacy `exit_reason`
+
+**Scripts:**
+- `scripts/migrate_lifecycle_fields.py`: idempotent migration; adds `close_reason`, `realized_pnl_total`, `parent_position_id` to existing docs; maps old `exit_reason` values to new enum; `--dry-run` flag
+
+**Tests:** 55 tests pass (+2 new tests for realized P&L in net-price rollup)
+
+### What comes next
+
+- Phase Transition Alerts (Milestone 4) — depends on Task 4 ✓
+- Then full Milestone 4 agent infrastructure
 
 ---
 

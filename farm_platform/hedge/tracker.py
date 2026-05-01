@@ -79,7 +79,10 @@ async def add_position(doc: dict[str, Any]) -> str:
     doc.setdefault("exit_price_per_bu", None)
     doc.setdefault("exit_date", None)
     doc.setdefault("exit_reason", None)
+    doc.setdefault("close_reason", None)
     doc.setdefault("realized_pnl_per_bu", None)
+    doc.setdefault("realized_pnl_total", None)
+    doc.setdefault("parent_position_id", None)
     doc.setdefault("notes", "")
     doc.setdefault("audit_log", [])
     # Tax classification defaults — auto-derive from phase if not supplied
@@ -117,6 +120,7 @@ async def get_all_positions(
 async def close_position_with_pnl(
     position_id: str,
     exit_price_per_bu: float,
+    close_reason: str = "manual",
     exit_date: str | None = None,
     notes: str = "",
 ) -> None:
@@ -124,8 +128,11 @@ async def close_position_with_pnl(
     pos = await get_position(position_id)
     if pos is None:
         raise ValueError(f"Position {position_id} not found")
+    if pos.get("status", "ACTIVE") != "ACTIVE":
+        raise ValueError(f"Position {position_id} is not ACTIVE (status={pos.get('status')})")
 
-    realized_pnl = round(exit_price_per_bu - pos["premium_paid_per_bu"], 4)
+    realized_pnl_per_bu = round(exit_price_per_bu - pos["premium_paid_per_bu"], 4)
+    realized_pnl_total = round(realized_pnl_per_bu * pos["expected_bushels"], 2)
     exit_dt = exit_date or _now_iso()
 
     updates: dict[str, Any] = {
@@ -133,8 +140,9 @@ async def close_position_with_pnl(
         "closed": True,                      # backward-compat
         "exit_price_per_bu": exit_price_per_bu,
         "exit_date": exit_dt,
-        "exit_reason": "sold",
-        "realized_pnl_per_bu": realized_pnl,
+        "close_reason": close_reason,
+        "realized_pnl_per_bu": realized_pnl_per_bu,
+        "realized_pnl_total": realized_pnl_total,
     }
     if notes:
         existing = pos.get("notes", "")
@@ -143,50 +151,57 @@ async def close_position_with_pnl(
     await update_position(position_id, updates)
     await append_audit_entry(position_id, "closed", {
         "exit_price_per_bu": exit_price_per_bu,
-        "realized_pnl_per_bu": realized_pnl,
+        "close_reason": close_reason,
+        "realized_pnl_per_bu": realized_pnl_per_bu,
+        "realized_pnl_total": realized_pnl_total,
     })
-    log.info("position_closed", id=position_id, realized_pnl_per_bu=realized_pnl)
+    log.info("position_closed", id=position_id, realized_pnl_per_bu=realized_pnl_per_bu)
 
 
 async def expire_position(
     position_id: str,
-    exit_price_per_bu: float = 0.0,
     exit_date: str | None = None,
 ) -> None:
-    """Mark a position EXPIRED (held to expiration)."""
+    """Mark a position EXPIRED (held to expiration worthless).
+
+    Realized P&L is always -(premium_paid) — expiry means the option was worthless.
+    close_reason is always "expiry" so the field is never null on non-active positions.
+    """
     pos = await get_position(position_id)
     if pos is None:
         raise ValueError(f"Position {position_id} not found")
+    if pos.get("status", "ACTIVE") != "ACTIVE":
+        raise ValueError(f"Position {position_id} is not ACTIVE (status={pos.get('status')})")
 
-    realized_pnl = round(exit_price_per_bu - pos["premium_paid_per_bu"], 4)
+    realized_pnl_per_bu = round(0.0 - pos["premium_paid_per_bu"], 4)
+    realized_pnl_total = round(realized_pnl_per_bu * pos["expected_bushels"], 2)
     exit_dt = exit_date or _now_iso()
-    reason = "expired_with_value" if exit_price_per_bu > 0 else "expired_worthless"
 
     await update_position(position_id, {
         "status": "EXPIRED",
         "closed": True,                      # backward-compat
-        "exit_price_per_bu": exit_price_per_bu,
+        "exit_price_per_bu": 0.0,
         "exit_date": exit_dt,
-        "exit_reason": reason,
-        "realized_pnl_per_bu": realized_pnl,
+        "close_reason": "expiry",
+        "realized_pnl_per_bu": realized_pnl_per_bu,
+        "realized_pnl_total": realized_pnl_total,
     })
     await append_audit_entry(position_id, "expired", {
-        "exit_price_per_bu": exit_price_per_bu,
-        "realized_pnl_per_bu": realized_pnl,
-        "reason": reason,
+        "realized_pnl_per_bu": realized_pnl_per_bu,
+        "realized_pnl_total": realized_pnl_total,
     })
-    log.info("position_expired", id=position_id, realized_pnl_per_bu=realized_pnl)
+    log.info("position_expired", id=position_id, realized_pnl_per_bu=realized_pnl_per_bu)
 
 
-async def soft_delete_position(position_id: str) -> None:
-    """Soft-delete: sets status=DELETED. Never hard-deletes from MongoDB."""
+async def delete_position(position_id: str) -> None:
+    """Hard-delete a position from MongoDB. Personal use only — cannot be undone."""
+    from farm_platform.storage.mongo import delete_position_hard
     pos = await get_position(position_id)
     if pos is None:
         raise ValueError(f"Position {position_id} not found")
 
-    await update_position(position_id, {"status": "DELETED", "exit_reason": "data_error"})
-    await append_audit_entry(position_id, "deleted", {})
-    log.info("position_deleted", id=position_id)
+    await delete_position_hard(position_id)
+    log.info("position_hard_deleted", id=position_id)
 
 
 async def transition_to_phase2(position_id: str, cash_sale_price: float) -> None:
@@ -200,15 +215,20 @@ async def transition_to_phase2(position_id: str, cash_sale_price: float) -> None
 
 
 async def patch_position(position_id: str, updates: dict[str, Any]) -> None:
-    """Apply partial updates to a position (e.g. update delta, notes)."""
+    """Apply partial updates to a position. Edits are only allowed on ACTIVE positions."""
     for key in ("_id", "id", "created_at", "status", "exit_price_per_bu",
-                "exit_date", "exit_reason", "realized_pnl_per_bu"):
+                "exit_date", "exit_reason", "close_reason", "realized_pnl_per_bu",
+                "realized_pnl_total", "parent_position_id"):
         updates.pop(key, None)
 
     if not updates:
         return
 
     old = await get_position(position_id)
+    if old is None:
+        raise ValueError(f"Position {position_id} not found")
+    if old.get("status", "ACTIVE") != "ACTIVE":
+        raise ValueError(f"Position {position_id} cannot be edited (status={old.get('status')})")
     changes = {
         k: {"from": (old or {}).get(k), "to": v}
         for k, v in updates.items()

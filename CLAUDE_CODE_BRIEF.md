@@ -1024,8 +1024,59 @@ Work through milestones in order. Each milestone should be fully working before 
 
 ---
 
+### TASK 4 -- Position Lifecycle Management
+**Goal:** Every position has a terminal state. The Phase Transition Alerts engine and AI agent require `status`, `closed_price`, and realized P&L fields before they can operate. Task 4 ships before any Milestone 4 agent work.
+
+#### Schema additions (MongoDB position documents)
+
+- [x] Add `status` field: enum `active` | `closed` | `expired`
+  - `closed` = sold to close before expiry; `closed_price` is set
+  - `expired` = held to expiration worthless; `closed_price` is null
+  - Kept as separate states — P&L math differs; calculator must not infer which case
+- [x] Add `closed_date` (`exit_date` in schema): date position left active status
+- [x] Add `closed_price` (`exit_price_per_bu` in schema): nullable float, set only when `status == "CLOSED"`
+- [x] Add `close_reason`: enum string — `phase_transition`, `profit_take`, `stop`, `roll`, `expiry`, `manual`
+- [x] Add `realized_pnl_per_bu`: per-bushel realized P&L, feeds net price calc
+- [x] Add `realized_pnl_total`: total dollar realized P&L (for tax and ledger); stored at close time
+- [x] Add `parent_position_id`: nullable FK to prior position (for rolls); schema-only
+- [x] Update Pydantic models (`PositionResponse`, `CloseRequest`, `ExpireRequest`) with new fields
+- [x] Migration script: `scripts/migrate_lifecycle_fields.py` — idempotent, `--dry-run` flag
+
+#### Endpoints
+
+- [x] `POST /api/hedge/positions/{id}/close` — requires `exit_price_per_bu` + `close_reason`; stores `realized_pnl_per_bu` + `realized_pnl_total`
+- [x] `POST /api/hedge/positions/{id}/expire` — no price; auto-sets `close_reason = "expiry"`, realized P&L = `-(premium_paid)`
+- [x] `PUT /api/hedge/positions/{id}` — rejects edits on non-active positions with 422
+- [x] `DELETE /api/hedge/positions/{id}` — hard delete (permanent)
+
+#### UI changes
+
+- [x] Close button → modal with exit price + close reason dropdown
+- [x] Expire button → confirms without exit price (always worthless)
+- [x] Closed/expired positions hidden by default behind toggle
+- [x] `ClosedPositionsPanel` client component with "Show/hide closed (N)" toggle
+- [x] Closed position row: displays `close_reason` label, `realized_pnl_per_bu`, total dollars
+
+#### Explicitly deferred
+
+- Audit history log (nothing reads from it yet)
+- Partial closes (close all; open smaller separately if needed)
+- Rolls as a first-class action (use `parent_position_id` linkage; dedicated roll workflow later)
+
+#### Task 4 Acceptance Criteria
+
+- [x] Active position can be closed via UI; realized P&L stored and displayed correctly
+- [x] Expired position can be marked expired via UI; P&L = -(premium paid)
+- [x] Closed/expired positions hidden by default; visible via toggle
+- [x] Net price rollup uses realized P&L for closed/expired positions and unrealized P&L for active positions
+- [x] Existing active positions unaffected (status = active, no regressions; 53 tests pass)
+
+---
+
 ### MILESTONE 4 -- AI Agent Layer
 **Goal:** All five agents operational, storing outputs to MongoDB, visible in the UI, with annotation capability.
+
+**Sequencing note:** Task 4 (position lifecycle) must be complete before any agent work begins. The Phase Transition Alerts engine cannot fire on positions that have no concept of "closed." Building the agent against an incomplete schema means rewriting tools and prompts later.
 
 #### Agent Infrastructure
 - [ ] Implement `platform/agents/base_agent.py`

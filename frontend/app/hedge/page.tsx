@@ -13,6 +13,7 @@ import PriceChart from "@/components/charts/PriceChart";
 import ScenarioModeler from "@/components/trading/ScenarioModeler";
 import PositionEntry from "@/components/trading/PositionEntry";
 import PositionActions from "@/components/trading/PositionActions";
+import ClosedPositionsPanel from "@/components/trading/ClosedPositionsPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -287,16 +288,9 @@ function CommoditySection({
         <p className="text-sm text-[#4a5568] italic">No active {commodity} positions.</p>
       )}
 
-      {/* Closed / expired positions */}
+      {/* Closed / expired positions — hidden by default */}
       {closedPositions.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-xs font-semibold text-[#7b8aab] uppercase tracking-wide">
-            Closed Positions ({closedPositions.length})
-          </h3>
-          {closedPositions.map((pos) => (
-            <ClosedPositionRow key={pos.id} pos={pos} />
-          ))}
-        </div>
+        <ClosedPositionsPanel positions={closedPositions} />
       )}
 
       {/* Scenario modeler */}
@@ -427,12 +421,22 @@ function PositionRow({
   );
 }
 
+const CLOSE_REASON_DISPLAY: Record<string, string> = {
+  profit_take:      "Profit take",
+  phase_transition: "Phase transition",
+  roll:             "Rolled",
+  stop:             "Stop",
+  expiry:           "Expiry",
+  manual:           "Manual",
+};
+
 function ClosedPositionRow({ pos }: { pos: Position }) {
   const isClosed = pos.status === "CLOSED";
   const statusColor = isClosed ? "text-[#7b8aab]" : "text-[#4a5568]";
+  const reason = pos.close_reason ?? pos.exit_reason;
   const statusLabel = pos.status === "EXPIRED"
-    ? (pos.exit_reason === "expired_with_value" ? "EXPIRED (w/ value)" : "EXPIRED WORTHLESS")
-    : "CLOSED";
+    ? "EXPIRED WORTHLESS"
+    : `CLOSED${reason && reason !== "manual" ? ` · ${CLOSE_REASON_DISPLAY[reason] ?? reason}` : ""}`;
 
   const realizedPnl = pos.realized_pnl_per_bu;
   const totalRealized = realizedPnl != null ? realizedPnl * pos.expected_bushels : null;

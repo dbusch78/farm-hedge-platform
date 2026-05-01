@@ -27,11 +27,11 @@ from farm_platform.hedge.scenario_model import run_phase1_scenarios, run_phase2_
 from farm_platform.hedge.tracker import (
     add_position,
     close_position_with_pnl,
+    delete_position,
     expire_position,
     get_all_positions,
     get_position_by_id,
     patch_position,
-    soft_delete_position,
 )
 from farm_platform.storage.timescale import get_futures_history, get_latest_cash, get_latest_futures
 
@@ -141,7 +141,10 @@ async def update_position(position_id: str, body: PositionUpdate) -> dict[str, s
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
     if not updates:
         raise HTTPException(status_code=422, detail="No fields to update")
-    await patch_position(position_id, updates)
+    try:
+        await patch_position(position_id, updates)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"id": position_id}
 
 
@@ -158,6 +161,7 @@ async def close_position_endpoint(
         await close_position_with_pnl(
             position_id,
             exit_price_per_bu=body.exit_price_per_bu,
+            close_reason=body.close_reason,
             exit_date=body.exit_date,
             notes=body.notes,
         )
@@ -178,7 +182,6 @@ async def expire_position_endpoint(
     try:
         await expire_position(
             position_id,
-            exit_price_per_bu=body.exit_price_per_bu,
             exit_date=body.exit_date,
         )
     except ValueError as exc:
@@ -188,13 +191,10 @@ async def expire_position_endpoint(
 
 @router.delete("/positions/{position_id}", response_model=dict[str, str])
 async def delete_position_endpoint(position_id: str) -> dict[str, str]:
-    pos = await get_position_by_id(position_id)
-    if pos is None:
-        raise HTTPException(status_code=404, detail="Position not found")
     try:
-        await soft_delete_position(position_id)
+        await delete_position(position_id)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"id": position_id}
 
 
@@ -202,65 +202,118 @@ async def delete_position_endpoint(position_id: str) -> dict[str, str]:
 
 @router.get("/net-price", response_model=list[NetPriceResponse])
 async def get_net_prices() -> list[dict[str, Any]]:
-    """Return net effective price for each active position."""
-    positions = await get_all_positions(active_only=True)
-    results = []
-    for pos in positions:
-        symbol = f"{pos['commodity']}=F"
-        latest = await get_latest_futures(symbol)
-        if latest is None:
-            continue
-        underlying = float(latest["close"]) if latest["close"] else 0.0
+    """Return net effective price for each (commodity, phase) group.
 
-        if pos["phase"] == 1:
-            result = calc_phase1(
-                current_cash_price=underlying,
-                underlying_price=underlying,
-                strike=pos["strike"],
-                total_premiums_paid_per_bu=pos["premium_paid_per_bu"],
-                expected_bushels=pos["expected_bushels"],
-                delta_at_entry=pos["delta_at_entry"],
-            )
-            put_pnl = round(result.put_intrinsic_value - result.total_premiums_paid, 4)
-            vs_spot = round(result.net_effective_price - underlying, 4)
-            results.append({
-                "commodity": pos["commodity"],
-                "phase": 1,
-                "underlying_price": underlying,
-                "net_effective_price": result.net_effective_price,
-                "put_intrinsic": result.put_intrinsic_value,
-                "call_intrinsic": 0.0,
-                "options_pnl_per_bu": put_pnl,
-                "net_effective_vs_spot_per_bu": vs_spot,
-                "total_premiums_paid": result.total_premiums_paid,
-                "raw_contracts": result.raw_contracts,
-                "delta_adj_contracts": result.delta_adj_contracts,
-            })
-        else:
-            cash_locked = pos.get("cash_sale_price") or underlying
-            result2 = calc_phase2(
-                cash_sale_price=cash_locked,
-                underlying_price=underlying,
-                call_strike=pos["strike"],
-                call_premium_paid_per_bu=pos["premium_paid_per_bu"],
-                total_premiums_paid_per_bu=pos["premium_paid_per_bu"],
-                expected_bushels=pos["expected_bushels"],
-                delta_at_entry=pos["delta_at_entry"],
-            )
-            vs_spot2 = round(result2.net_effective_price - underlying, 4)
-            results.append({
-                "commodity": pos["commodity"],
-                "phase": 2,
-                "underlying_price": underlying,
-                "net_effective_price": result2.net_effective_price,
-                "put_intrinsic": 0.0,
-                "call_intrinsic": max(underlying - pos["strike"], 0.0),
-                "options_pnl_per_bu": result2.call_pnl,
-                "net_effective_vs_spot_per_bu": vs_spot2,
-                "total_premiums_paid": result2.total_premiums_paid,
-                "raw_contracts": result2.raw_contracts,
-                "delta_adj_contracts": result2.delta_adj_contracts,
-            })
+    Active positions contribute unrealized (mark-to-market) P&L.
+    Closed and expired positions contribute their locked realized P&L.
+    Both are weight-averaged by raw_contracts into one row per group.
+    """
+    positions = await get_all_positions(status="all")   # excludes DELETED
+    results = []
+
+    # Batch futures lookups — one fetch per commodity symbol.
+    futures_cache: dict[str, float] = {}
+
+    async def _underlying(commodity: str) -> float:
+        sym = f"{commodity}=F"
+        if sym not in futures_cache:
+            latest = await get_latest_futures(sym)
+            futures_cache[sym] = float(latest["close"]) if (latest and latest["close"]) else 0.0
+        return futures_cache[sym]
+
+    for pos in positions:
+        status = pos.get("status", "ACTIVE")
+        underlying = await _underlying(pos["commodity"])
+        if not underlying:
+            continue
+
+        raw = pos["expected_bushels"] / 5_000
+        delta_adj = raw / pos["delta_at_entry"] if pos["delta_at_entry"] else 0.0
+
+        if status == "ACTIVE":
+            if pos["phase"] == 1:
+                result = calc_phase1(
+                    current_cash_price=underlying,
+                    underlying_price=underlying,
+                    strike=pos["strike"],
+                    total_premiums_paid_per_bu=pos["premium_paid_per_bu"],
+                    expected_bushels=pos["expected_bushels"],
+                    delta_at_entry=pos["delta_at_entry"],
+                )
+                options_pnl = round(result.put_intrinsic_value - result.total_premiums_paid, 4)
+                results.append({
+                    "commodity": pos["commodity"],
+                    "phase": 1,
+                    "underlying_price": underlying,
+                    "net_effective_price": result.net_effective_price,
+                    "put_intrinsic": result.put_intrinsic_value,
+                    "call_intrinsic": 0.0,
+                    "options_pnl_per_bu": options_pnl,
+                    "net_effective_vs_spot_per_bu": round(result.net_effective_price - underlying, 4),
+                    "total_premiums_paid": result.total_premiums_paid,
+                    "raw_contracts": result.raw_contracts,
+                    "delta_adj_contracts": result.delta_adj_contracts,
+                })
+            else:
+                cash_locked = pos.get("cash_sale_price") or underlying
+                result2 = calc_phase2(
+                    cash_sale_price=cash_locked,
+                    underlying_price=underlying,
+                    call_strike=pos["strike"],
+                    call_premium_paid_per_bu=pos["premium_paid_per_bu"],
+                    total_premiums_paid_per_bu=pos["premium_paid_per_bu"],
+                    expected_bushels=pos["expected_bushels"],
+                    delta_at_entry=pos["delta_at_entry"],
+                )
+                results.append({
+                    "commodity": pos["commodity"],
+                    "phase": 2,
+                    "underlying_price": underlying,
+                    "net_effective_price": result2.net_effective_price,
+                    "put_intrinsic": 0.0,
+                    "call_intrinsic": max(underlying - pos["strike"], 0.0),
+                    "options_pnl_per_bu": result2.call_pnl,
+                    "net_effective_vs_spot_per_bu": round(result2.net_effective_price - underlying, 4),
+                    "total_premiums_paid": result2.total_premiums_paid,
+                    "raw_contracts": result2.raw_contracts,
+                    "delta_adj_contracts": result2.delta_adj_contracts,
+                })
+
+        elif status in ("CLOSED", "EXPIRED"):
+            # Use locked realized P&L — no mark-to-market for non-active positions.
+            realized_pnl = pos.get("realized_pnl_per_bu") or 0.0
+            if pos["phase"] == 1:
+                # Grain may not yet be sold; use current futures as cash proxy.
+                net_price = round(underlying + realized_pnl, 4)
+                results.append({
+                    "commodity": pos["commodity"],
+                    "phase": 1,
+                    "underlying_price": underlying,
+                    "net_effective_price": net_price,
+                    "put_intrinsic": 0.0,
+                    "call_intrinsic": 0.0,
+                    "options_pnl_per_bu": realized_pnl,
+                    "net_effective_vs_spot_per_bu": round(realized_pnl, 4),
+                    "total_premiums_paid": pos["premium_paid_per_bu"],
+                    "raw_contracts": round(raw, 2),
+                    "delta_adj_contracts": round(delta_adj, 2),
+                })
+            else:
+                cash_locked = pos.get("cash_sale_price") or underlying
+                net_price = round(cash_locked + realized_pnl, 4)
+                results.append({
+                    "commodity": pos["commodity"],
+                    "phase": 2,
+                    "underlying_price": underlying,
+                    "net_effective_price": net_price,
+                    "put_intrinsic": 0.0,
+                    "call_intrinsic": 0.0,
+                    "options_pnl_per_bu": realized_pnl,
+                    "net_effective_vs_spot_per_bu": round(net_price - underlying, 4),
+                    "total_premiums_paid": pos["premium_paid_per_bu"],
+                    "raw_contracts": round(raw, 2),
+                    "delta_adj_contracts": round(delta_adj, 2),
+                })
     # Aggregate by (commodity, phase) so puts and calls are never blended.
     # Multiple same-strategy positions (e.g. two ZS call strikes) collapse to
     # one weighted-average row; different strategies (ZC puts vs ZC calls) stay

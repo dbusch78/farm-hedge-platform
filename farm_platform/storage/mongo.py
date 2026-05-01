@@ -138,6 +138,12 @@ async def update_position(position_id: str, updates: dict[str, Any]) -> None:
     )
 
 
+async def delete_position_hard(position_id: str) -> None:
+    """Permanently remove a position document. Cannot be undone."""
+    db = get_db()
+    await db.positions.delete_one({"_id": ObjectId(position_id)})
+
+
 # ── cash_sales ───────────────────────────────────────────────────────────────
 
 async def list_cash_sales(
