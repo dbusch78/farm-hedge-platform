@@ -28,6 +28,12 @@ export interface Position {
   exit_reason: string | null;
   realized_pnl_per_bu: number | null;
   notes: string;
+  // Tax classification
+  tax_treatment?: string | null;
+  hedge_documentation?: string | null;
+  hedge_identification_date?: string | null;
+  irc_1221_acknowledgment?: boolean | null;
+  linked_cash_sale_ids?: string[];
   // Live P&L — populated for ACTIVE positions by GET /positions
   underlying_price?: number | null;
   options_pnl_per_bu?: number | null;
@@ -48,6 +54,10 @@ export interface PositionCreate {
   date_opened: string;
   cash_sale_price?: number | null;
   notes?: string;
+  // Tax enforcement
+  hedge_documentation?: string | null;
+  irc_1221_acknowledgment?: boolean;
+  linked_cash_sale_ids?: string[];
 }
 
 export interface PositionUpdate {

@@ -34,6 +34,13 @@ class PositionCreate(BaseModel):
     date_opened: str = Field(examples=["2025-04-01T00:00:00Z"])
     cash_sale_price: float | None = None
     notes: str = ""
+    # Tax enforcement — Phase 1 (HEDGE)
+    tax_treatment: Literal["HEDGE", "SPECULATIVE"] | None = None  # auto-derived if omitted
+    hedge_documentation: str | None = None
+    hedge_identification_date: str | None = None   # auto-set to date_opened if omitted
+    irc_1221_acknowledgment: bool = False
+    # Tax enforcement — Phase 2 (SPECULATIVE)
+    linked_cash_sale_ids: list[str] = Field(default_factory=list)  # informational, no bushel match required
 
 
 class PositionUpdate(BaseModel):
@@ -97,6 +104,12 @@ class PositionResponse(BaseModel):
     exit_reason: str | None = None
     realized_pnl_per_bu: float | None = None
     notes: str = ""
+    # Tax classification
+    tax_treatment: str | None = None
+    hedge_documentation: str | None = None
+    hedge_identification_date: str | None = None
+    irc_1221_acknowledgment: bool | None = None
+    linked_cash_sale_ids: list[str] = Field(default_factory=list)
     # Live P&L — populated for ACTIVE positions; None for closed/expired
     underlying_price: float | None = None
     options_pnl_per_bu: float | None = None

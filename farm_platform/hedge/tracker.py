@@ -82,6 +82,15 @@ async def add_position(doc: dict[str, Any]) -> str:
     doc.setdefault("realized_pnl_per_bu", None)
     doc.setdefault("notes", "")
     doc.setdefault("audit_log", [])
+    # Tax classification defaults — auto-derive from phase if not supplied
+    if doc.get("tax_treatment") is None:
+        doc["tax_treatment"] = "HEDGE" if doc.get("phase") == 1 else "SPECULATIVE"
+    if doc["tax_treatment"] == "HEDGE" and doc.get("hedge_identification_date") is None:
+        # Identification date = entry date (date portion only)
+        date_opened = doc.get("date_opened", "")
+        doc["hedge_identification_date"] = date_opened[:10] if date_opened else None
+    doc.setdefault("irc_1221_acknowledgment", False)
+    doc.setdefault("linked_cash_sale_ids", [])
     position_id = await create_position(doc)
     await append_audit_entry(position_id, "created", {})
     log.info("position_created", id=position_id, commodity=doc["commodity"])

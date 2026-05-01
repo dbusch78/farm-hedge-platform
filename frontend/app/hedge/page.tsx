@@ -2,12 +2,13 @@ import {
   getFuturesPrices,
   getFuturesHistory,
   getCashPrices,
+  getCashSales,
   getPositions,
   getNetPrices,
 } from "@/lib/api";
 import { cmeSymbolToLabel } from "@/lib/cme";
 import { calcLiveDelta, calcHedgeCoverage, cmeSymbolToExpiry } from "@/lib/blackScholes";
-import type { FuturesPrice, NetPriceResponse, Position, OhlcBar, CashPrice } from "@/lib/types";
+import type { CashSale, FuturesPrice, NetPriceResponse, Position, OhlcBar, CashPrice } from "@/lib/types";
 import PriceChart from "@/components/charts/PriceChart";
 import ScenarioModeler from "@/components/trading/ScenarioModeler";
 import PositionEntry from "@/components/trading/PositionEntry";
@@ -28,7 +29,7 @@ function fmt(n: number, d = 2) {
 }
 
 export default async function HedgePage() {
-  const [positions, closedPositionsData, futuresPrices, netPrices, zcHistory, zsHistory, cashPrices] =
+  const [positions, closedPositionsData, futuresPrices, netPrices, zcHistory, zsHistory, cashPrices, cashSalesData] =
     await Promise.all([
       safeFetch(() => getPositions("active")),
       safeFetch(() => getPositions("closed")),
@@ -37,10 +38,12 @@ export default async function HedgePage() {
       safeFetch(() => getFuturesHistory("ZC=F", 120)),
       safeFetch(() => getFuturesHistory("ZS=F", 120)),
       safeFetch(() => getCashPrices()),
+      safeFetch(() => getCashSales()),
     ]);
 
   const allPositions: Position[] = positions ?? [];
   const closedPositions: Position[] = closedPositionsData ?? [];
+  const cashSales: CashSale[] = cashSalesData ?? [];
   const prices: FuturesPrice[] = futuresPrices ?? [];
   const netPriceList: NetPriceResponse[] = netPrices ?? [];
 
@@ -137,7 +140,7 @@ export default async function HedgePage() {
 
       {/* ── Add position ──────────────────────────────────────────────────── */}
       <section className="bg-[#1a1f2e] rounded-lg border border-[#2a3044] p-5">
-        <PositionEntry />
+        <PositionEntry cashSales={cashSales} />
       </section>
     </div>
   );

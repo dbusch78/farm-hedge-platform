@@ -2,9 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { createPosition } from "@/lib/api";
-import type { Commodity, Phase, PositionType } from "@/lib/types";
+import type { CashSale, Commodity, Phase, PositionType } from "@/lib/types";
 
 interface Props {
+  cashSales?: CashSale[];
   onSuccess?: () => void;
 }
 
@@ -21,6 +22,12 @@ interface FormState {
   date_opened: string;
   cash_sale_price: string;
   notes: string;
+  // Phase 1 — HEDGE
+  hedge_documentation: string;
+  irc_1221_acknowledgment: boolean;
+  // Phase 2 — SPECULATIVE
+  linked_cash_sale_ids: string[];
+  speculative_acknowledgment: boolean;
 }
 
 const INITIAL: FormState = {
@@ -36,9 +43,13 @@ const INITIAL: FormState = {
   date_opened: new Date().toISOString().slice(0, 10),
   cash_sale_price: "",
   notes: "",
+  hedge_documentation: "",
+  irc_1221_acknowledgment: false,
+  linked_cash_sale_ids: [],
+  speculative_acknowledgment: false,
 };
 
-export default function PositionEntry({ onSuccess }: Props) {
+export default function PositionEntry({ cashSales = [], onSuccess }: Props) {
   const [form, setForm] = useState<FormState>(INITIAL);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -46,6 +57,15 @@ export default function PositionEntry({ onSuccess }: Props) {
 
   function set<K extends keyof FormState>(k: K, v: FormState[K]) {
     setForm((prev) => ({ ...prev, [k]: v }));
+  }
+
+  function toggleLinkedSale(id: string) {
+    setForm((prev) => ({
+      ...prev,
+      linked_cash_sale_ids: prev.linked_cash_sale_ids.includes(id)
+        ? prev.linked_cash_sale_ids.filter((x) => x !== id)
+        : [...prev.linked_cash_sale_ids, id],
+    }));
   }
 
   // Live delta-adjusted contract count
@@ -57,10 +77,19 @@ export default function PositionEntry({ onSuccess }: Props) {
       ? rawContracts / delta
       : null;
 
+  const isPhase1 = form.position_type === "put";
+  const relevantSales = cashSales.filter((s) => s.commodity === form.commodity);
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setSuccess(null);
+
+    // Frontend gate: Phase 1 requires acknowledgment if documentation is entered
+    if (isPhase1 && form.hedge_documentation && !form.irc_1221_acknowledgment) {
+      setError("Check the IRC §1221 acknowledgment to confirm hedge identification.");
+      return;
+    }
 
     startTransition(async () => {
       try {
@@ -80,6 +109,12 @@ export default function PositionEntry({ onSuccess }: Props) {
               ? parseFloat(form.cash_sale_price)
               : null,
           notes: form.notes,
+          // Tax fields
+          hedge_documentation: isPhase1 && form.hedge_documentation
+            ? form.hedge_documentation
+            : undefined,
+          irc_1221_acknowledgment: isPhase1 ? form.irc_1221_acknowledgment : undefined,
+          linked_cash_sale_ids: !isPhase1 ? form.linked_cash_sale_ids : undefined,
         };
         const result = await createPosition(body);
         setSuccess(`Position created (ID: ${result.id})`);
@@ -129,8 +164,8 @@ export default function PositionEntry({ onSuccess }: Props) {
             }}
             className="input-dark"
           >
-            <option value="put">Put (Phase 1)</option>
-            <option value="call">Call (Phase 2)</option>
+            <option value="put">Put (Phase 1 — Hedge)</option>
+            <option value="call">Call (Phase 2 — Speculative)</option>
           </select>
         </Field>
 
@@ -238,6 +273,110 @@ export default function PositionEntry({ onSuccess }: Props) {
               </span>
             </p>
           )}
+        </div>
+      )}
+
+      {/* ── Phase 1: HEDGE documentation ───────────────────────────────────── */}
+      {isPhase1 && (
+        <div className="border border-[#a3e63540] bg-[#a3e63508] rounded-lg p-4 space-y-3">
+          <p className="text-xs font-semibold text-[#a3e635] uppercase tracking-wide">
+            IRC §1221 Hedge Identification
+          </p>
+          <p className="text-[11px] text-[#7b8aab]">
+            Identification must be made before the close of trading on the day of entry.
+            This timestamp is locked once saved.
+          </p>
+
+          <Field label="Hedge documentation statement">
+            <textarea
+              value={form.hedge_documentation}
+              onChange={(e) => set("hedge_documentation", e.target.value)}
+              rows={2}
+              placeholder="e.g. Hedging anticipated ZC corn harvest, 2026 crop year, Dennis C. Busch Farm"
+              className="input-dark resize-none w-full"
+            />
+          </Field>
+
+          <div className="flex items-start gap-2 text-xs text-[#7b8aab]">
+            <span className="text-[#4a5568]">Identification date:</span>
+            <span className="text-[#e8edf5]">{form.date_opened}</span>
+            <span className="text-[#4a5568]">(UTC, locked on save)</span>
+          </div>
+
+          <label className="flex items-start gap-2 cursor-pointer group">
+            <input
+              type="checkbox"
+              checked={form.irc_1221_acknowledgment}
+              onChange={(e) => set("irc_1221_acknowledgment", e.target.checked)}
+              className="mt-0.5 accent-[#a3e635]"
+            />
+            <span className="text-[11px] text-[#7b8aab] group-hover:text-[#e8edf5] transition-colors leading-relaxed">
+              I identify this as a hedge transaction under IRC §1221 as of the date and
+              time of entry. I understand this identification is contemporaneous and
+              cannot be changed after the close of trading today.
+            </span>
+          </label>
+        </div>
+      )}
+
+      {/* ── Phase 2: SPECULATIVE — cash sale linkage ────────────────────────── */}
+      {!isPhase1 && (
+        <div className="border border-[#3b82f640] bg-[#3b82f608] rounded-lg p-4 space-y-3">
+          <p className="text-xs font-semibold text-[#3b82f6] uppercase tracking-wide">
+            Section 1256 Speculative Position
+          </p>
+
+          {relevantSales.length > 0 ? (
+            <div className="space-y-1.5">
+              <p className="text-[11px] text-[#7b8aab]">
+                Link to related cash sale(s) — informational only, no bushel match
+                required. You can link zero, one, or multiple.
+              </p>
+              {relevantSales.map((sale) => {
+                const checked = form.linked_cash_sale_ids.includes(sale.id);
+                return (
+                  <label
+                    key={sale.id}
+                    className="flex items-center gap-2 cursor-pointer group"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleLinkedSale(sale.id)}
+                      className="accent-[#3b82f6]"
+                    />
+                    <span className={`text-xs transition-colors ${checked ? "text-[#e8edf5]" : "text-[#7b8aab] group-hover:text-[#e8edf5]"}`}>
+                      {sale.sale_date} &bull; {sale.bushels.toLocaleString()} bu @{" "}
+                      ${sale.cash_price_per_bu.toFixed(4)}/bu
+                      {sale.delivery_location && (
+                        <span className="text-[#4a5568]"> — {sale.delivery_location}</span>
+                      )}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-[11px] text-[#4a5568] italic">
+              No {form.commodity} cash sales on record.{" "}
+              <a href="/tax" className="text-[#3b82f6] hover:underline">Add one in Tax →</a>
+            </p>
+          )}
+
+          <label className="flex items-start gap-2 cursor-pointer group">
+            <input
+              type="checkbox"
+              checked={form.speculative_acknowledgment}
+              onChange={(e) => set("speculative_acknowledgment", e.target.checked)}
+              className="mt-0.5 accent-[#3b82f6]"
+            />
+            <span className="text-[11px] text-[#7b8aab] group-hover:text-[#e8edf5] transition-colors leading-relaxed">
+              I acknowledge this is a speculative position subject to IRC §1256
+              mark-to-market treatment. Open positions will be valued at fair market
+              value on December 31. Gains and losses are treated as 60% long-term /
+              40% short-term capital gains regardless of holding period.
+            </span>
+          </label>
         </div>
       )}
 
