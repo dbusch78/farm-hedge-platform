@@ -1,5 +1,55 @@
 # Session Notes
 
+## Session: 2026-05-14 — Phase Transition Alerts (Milestone 4 start)
+
+### What was done
+
+**Phase Transition Alerts — complete:**
+
+- `farm_platform/hedge/alerts.py`: pure-function engine with no I/O
+  - `cme_symbol_to_expiry()`: Python mirror of frontend `cmeSymbolToExpiry` (last
+    Friday of month before delivery)
+  - `_black76_delta()`: Black-76 |Δ| using hardcoded IV (ZC=22%, ZS=18%)
+  - Phase 1 roll-up: fires when delta drifted AND floor ≥ roll_threshold below
+    market AND days_to_expiry ≥ 30
+  - Phase 1 roll-down: fires when deep ITM (> 20¢ ZC / 50¢ ZS) AND delta > 0.80
+  - Phase 2 yellow: fires when days ≤ 60 OR pct_of_peak ≥ 70%
+  - Phase 2 red: fires on retracement > 20% from peak OR time/pct combos
+- `farm_platform/config.py`: `AlertSettings` (thresholds configurable via env
+  vars, env prefix `ALERT_`); `alert_job_interval_hrs` added to `ScheduleSettings`
+- `farm_platform/storage/mongo.py`: `alerts` collection with indexes; `create_alert`,
+  `get_active_alert`, `list_active_alerts`, `acknowledge_alert`
+- `farm_platform/hedge/tracker.py`: `peak_pnl_per_bu` + `peak_pnl_date` defaults
+  on new positions
+- `backend/models/hedge.py`: peak fields on `PositionResponse`; `AlertResponse`
+- `backend/routers/hedge.py`: `GET /api/hedge/alerts`, `POST /api/hedge/alerts/{id}/acknowledge`
+- `backend/main.py`: `_update_peaks_and_alerts()` APScheduler daily job — batches
+  futures lookups, updates high-water marks, fires alerts with deduplication
+  (no duplicate unacknowledged alerts per position+alert_type)
+- Frontend:
+  - `lib/types.ts`: `HedgeAlert` interface; `peak_pnl_per_bu`/`peak_pnl_date` on `Position`
+  - `lib/api.ts`: `getAlerts()`, `acknowledgeAlert()`
+  - `app/hedge/page.tsx`: fetches alerts; renders `AlertBanner`; peak P&L stat
+    on Phase 2 cards with % capture tooltip
+  - `components/trading/AlertBanner.tsx`: yellow/red dismissable alert rows;
+    `router.refresh()` on dismiss to clear server-rendered banner
+- `tests/platform/test_alerts.py`: 17 tests — expiry math, all trigger conditions,
+  boundary cases, metadata shape
+
+### What comes next
+
+- Milestone 4 Agent Infrastructure:
+  - `farm_platform/agents/base_agent.py` — Claude API call, prompt versioning,
+    `agent_runs` write, token cost logging
+  - `annotate_agent_run` in mongo.py (already scaffolded, just needs wiring)
+  - Individual agents: USDA skeptic, SA monitor, weather analyst, news filter,
+    positioning advisor (in that dependency order)
+  - `GET /api/agents/runs`, `GET /api/agents/runs/{id}`, `POST /api/agents/{agent}/run`
+  - `app/agents/page.tsx` with annotation controls
+  - Agent card on main dashboard with real positioning advisor output
+
+---
+
 ## Session: 2026-04-28 (late) — Hedge display sprint (Tasks 1-3)
 
 ### What was done

@@ -1168,16 +1168,16 @@ at 80% of peak" — visible even when no alert is firing.
 
 ##### Checklist
 
-- [ ] Add `peak_pnl_per_bu` + `peak_pnl_date` fields to position schema
-- [ ] APScheduler job: daily P&L computation + high-water mark update
-- [ ] Implement `farm_platform/hedge/alerts.py` with trigger logic above
-- [ ] YAML config for thresholds (roll_threshold, time windows, pct triggers)
-- [ ] Evaluate rules against position state on schedule (APScheduler)
-- [ ] Store triggered alerts to MongoDB with level (yellow/red) + reason
-- [ ] `GET /api/hedge/alerts` -- active unacknowledged alerts
-- [ ] `POST /api/hedge/alerts/{id}/acknowledge` -- mark acknowledged
-- [ ] Alert badge / banner in hedge page UI (yellow/red styling)
-- [ ] Phase 2 position card: show peak P&L + capture % at all times
+- [x] Add `peak_pnl_per_bu` + `peak_pnl_date` fields to position schema
+- [x] APScheduler job: daily P&L computation + high-water mark update
+- [x] Implement `farm_platform/hedge/alerts.py` with trigger logic above
+- [x] YAML config for thresholds (roll_threshold, time windows, pct triggers)
+- [x] Evaluate rules against position state on schedule (APScheduler)
+- [x] Store triggered alerts to MongoDB with level (yellow/red) + reason
+- [x] `GET /api/hedge/alerts` -- active unacknowledged alerts
+- [x] `POST /api/hedge/alerts/{id}/acknowledge` -- mark acknowledged
+- [x] Alert badge / banner in hedge page UI (yellow/red styling)
+- [x] Phase 2 position card: show peak P&L + capture % at all times
 
 #### FastAPI + Frontend
 - [ ] `GET /api/agents/runs` -- list recent runs with filters
