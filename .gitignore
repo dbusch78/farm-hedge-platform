@@ -49,8 +49,14 @@ htmlcov/
 *.log
 logs/
 
-# Docker volumes -- never commit database data
-data/
+# Docker volumes -- never commit raw database data
+data/timescale/
+data/mongo/
+data/npm/
+data/npm-letsencrypt/
+data/grafana/
+# Dump files ARE committed so dev data syncs across machines
+# data/dumps/ is intentionally tracked
 
 # Node / Next.js
 node_modules/
