@@ -90,6 +90,32 @@ class ScheduleSettings(BaseSettings):
 
     futures_feed_interval_min: int = Field(default=15, alias="FUTURES_FEED_INTERVAL_MIN")
     weather_feed_interval_hrs: int = Field(default=6, alias="WEATHER_FEED_INTERVAL_HRS")
+    alert_job_interval_hrs: int = Field(default=24, alias="ALERT_JOB_INTERVAL_HRS")
+
+
+class AlertSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="ALERT_", extra="ignore")
+
+    # Phase 1 roll-up: fire when delta drifted AND floor below market AND time left
+    zc_roll_threshold: float = 0.15    # futures must be >= this far above strike ($/bu)
+    zs_roll_threshold: float = 0.35
+    roll_up_min_days: int = 30         # must have at least this many days to expiry
+    roll_up_delta_pct: float = 0.50    # current delta < 50% of delta_at_entry
+    roll_up_delta_abs: float = 0.15    # OR current delta < this absolute threshold
+
+    # Phase 1 roll-down: fire when deep ITM
+    roll_down_zc: float = 0.20         # futures < strike by this much
+    roll_down_zs: float = 0.50
+    roll_down_delta: float = 0.80      # AND current delta > this
+
+    # Phase 2 take-profit — stage 1 (yellow)
+    tp_yellow_days: int = 60           # days to expiry
+    tp_yellow_pct: float = 0.70        # current P&L >= 70% of peak
+
+    # Phase 2 take-profit — stage 2 (red)
+    tp_red_days: int = 45
+    tp_red_pct: float = 0.85           # 85% of peak when <= 60 days left
+    tp_retracement: float = 0.20       # position retracted > 20% from peak
 
 
 class Settings(BaseSettings):
@@ -110,6 +136,7 @@ class Settings(BaseSettings):
     farm: FarmSettings = Field(default_factory=FarmSettings)
     elevator: ElevatorSettings = Field(default_factory=ElevatorSettings)
     schedule: ScheduleSettings = Field(default_factory=ScheduleSettings)
+    alerts: AlertSettings = Field(default_factory=AlertSettings)
 
 
 settings = Settings()

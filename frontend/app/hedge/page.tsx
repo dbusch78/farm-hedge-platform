@@ -5,10 +5,12 @@ import {
   getCashSales,
   getPositions,
   getNetPrices,
+  getAlerts,
 } from "@/lib/api";
 import { cmeSymbolToLabel } from "@/lib/cme";
 import { calcLiveDelta, calcHedgeCoverage, cmeSymbolToExpiry } from "@/lib/blackScholes";
-import type { CashSale, FuturesPrice, NetPriceResponse, Position, OhlcBar, CashPrice } from "@/lib/types";
+import type { CashSale, FuturesPrice, HedgeAlert, NetPriceResponse, Position, OhlcBar, CashPrice } from "@/lib/types";
+import AlertBanner from "@/components/trading/AlertBanner";
 import PriceChart from "@/components/charts/PriceChart";
 import ScenarioModeler from "@/components/trading/ScenarioModeler";
 import PositionEntry from "@/components/trading/PositionEntry";
@@ -30,7 +32,7 @@ function fmt(n: number, d = 2) {
 }
 
 export default async function HedgePage() {
-  const [positions, closedPositionsData, futuresPrices, netPrices, zcHistory, zsHistory, cashPrices, cashSalesData] =
+  const [positions, closedPositionsData, futuresPrices, netPrices, zcHistory, zsHistory, cashPrices, cashSalesData, alertsData] =
     await Promise.all([
       safeFetch(() => getPositions("active")),
       safeFetch(() => getPositions("closed")),
@@ -40,6 +42,7 @@ export default async function HedgePage() {
       safeFetch(() => getFuturesHistory("ZS=F", 120)),
       safeFetch(() => getCashPrices()),
       safeFetch(() => getCashSales()),
+      safeFetch(() => getAlerts()),
     ]);
 
   const allPositions: Position[] = positions ?? [];
@@ -47,6 +50,7 @@ export default async function HedgePage() {
   const cashSales: CashSale[] = cashSalesData ?? [];
   const prices: FuturesPrice[] = futuresPrices ?? [];
   const netPriceList: NetPriceResponse[] = netPrices ?? [];
+  const alerts: HedgeAlert[] = alertsData ?? [];
 
   const zcPositions = allPositions.filter((p) => p.commodity === "ZC");
   const zsPositions = allPositions.filter((p) => p.commodity === "ZS");
@@ -92,6 +96,8 @@ export default async function HedgePage() {
           <code className="text-[#7b8aab]">python -m scripts.seed_positions</code>.
         </div>
       )}
+
+      {alerts.length > 0 && <AlertBanner alerts={alerts} />}
 
       {/* ── Corn: Phase 1 puts (downside floor) ──────────────────────────── */}
       {(zcPuts.length > 0 || zcPutsClosed.length > 0) && (
@@ -399,6 +405,13 @@ function PositionRow({
         )}
         {pos.phase === 2 && pos.cash_sale_price != null && (
           <Stat label="Cash locked" value={`$${fmt(pos.cash_sale_price)}/bu`} />
+        )}
+        {pos.phase === 2 && pos.peak_pnl_per_bu != null && pos.peak_pnl_per_bu > 0 && (
+          <Stat
+            label="Peak P&L"
+            value={`$${fmt(pos.peak_pnl_per_bu)}/bu`}
+            tooltip={`Peak options P&L recorded${pos.peak_pnl_date ? ` on ${new Date(pos.peak_pnl_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}. Current: ${positionPnl != null ? `$${fmt(positionPnl)}/bu (${positionPnl > 0 && pos.peak_pnl_per_bu > 0 ? Math.round((positionPnl / pos.peak_pnl_per_bu) * 100) : 0}% of peak)` : "—"}.`}
+          />
         )}
       </div>
 

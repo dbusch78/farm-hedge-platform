@@ -83,6 +83,8 @@ async def add_position(doc: dict[str, Any]) -> str:
     doc.setdefault("realized_pnl_per_bu", None)
     doc.setdefault("realized_pnl_total", None)
     doc.setdefault("parent_position_id", None)
+    doc.setdefault("peak_pnl_per_bu", None)
+    doc.setdefault("peak_pnl_date", None)
     doc.setdefault("notes", "")
     doc.setdefault("audit_log", [])
     # Tax classification defaults — auto-derive from phase if not supplied

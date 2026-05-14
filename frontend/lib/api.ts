@@ -7,6 +7,7 @@ import type {
   ExpireRequest,
   FuturesPrice,
   GduStatus,
+  HedgeAlert,
   NepBar,
   NetPriceResponse,
   OhlcBar,
@@ -285,5 +286,16 @@ export async function setPlantingDate(
 export async function deletePlantingDate(commodity: string, year: number): Promise<void> {
   await request<void>(`/api/weather/planting-dates/${commodity}/${year}`, {
     method: "DELETE",
+  });
+}
+
+export async function getAlerts(positionId?: string): Promise<HedgeAlert[]> {
+  const qs = positionId ? `?position_id=${positionId}` : "";
+  return request<HedgeAlert[]>(`/api/hedge/alerts${qs}`);
+}
+
+export async function acknowledgeAlert(alertId: string): Promise<void> {
+  await request<{ id: string }>(`/api/hedge/alerts/${alertId}/acknowledge`, {
+    method: "POST",
   });
 }

@@ -19,6 +19,7 @@ _db: AsyncIOMotorDatabase | None = None  # type: ignore[type-arg]
 # Collection names that must exist; created on init.
 COLLECTIONS = [
     "positions",
+    "alerts",
     "cash_sales",
     "usda_releases",
     "agent_runs",
@@ -52,6 +53,8 @@ async def ensure_collections() -> None:
 
     # Indexes
     await db.positions.create_index([("commodity", 1), ("phase", 1)])
+    await db.alerts.create_index([("position_id", 1), ("alert_type", 1), ("acknowledged", 1)])
+    await db.alerts.create_index([("acknowledged", 1), ("created_at", -1)])
     await db.cash_sales.create_index([("commodity", 1), ("sale_date", -1)])
     await db.agent_runs.create_index([("agent", 1), ("run_timestamp", -1)])
     await db.trading_mode_audit.create_index([("timestamp", -1)])
@@ -176,6 +179,45 @@ async def update_cash_sale(sale_id: str, updates: dict[str, Any]) -> None:
     await db.cash_sales.update_one(
         {"_id": ObjectId(sale_id)},
         {"$set": updates},
+    )
+
+
+# ── alerts ───────────────────────────────────────────────────────────────────
+
+async def create_alert(doc: dict[str, Any]) -> str:
+    db = get_db()
+    doc.setdefault("created_at", _now())
+    doc.setdefault("acknowledged", False)
+    doc.setdefault("acknowledged_at", None)
+    result = await db.alerts.insert_one(doc)
+    return str(result.inserted_id)
+
+
+async def get_active_alert(position_id: str, alert_type: str) -> dict[str, Any] | None:
+    """Return the most recent unacknowledged alert of a given type for a position."""
+    db = get_db()
+    doc = await db.alerts.find_one(
+        {"position_id": position_id, "alert_type": alert_type, "acknowledged": False},
+        sort=[("created_at", -1)],
+    )
+    return _serialize(doc)
+
+
+async def list_active_alerts(position_id: str | None = None) -> list[dict[str, Any]]:
+    """Return all unacknowledged alerts, optionally filtered to one position."""
+    db = get_db()
+    filt: dict[str, Any] = {"acknowledged": False}
+    if position_id:
+        filt["position_id"] = position_id
+    cursor = db.alerts.find(filt).sort("created_at", -1)
+    return [_serialize(d) async for d in cursor]
+
+
+async def acknowledge_alert(alert_id: str) -> None:
+    db = get_db()
+    await db.alerts.update_one(
+        {"_id": ObjectId(alert_id)},
+        {"$set": {"acknowledged": True, "acknowledged_at": _now()}},
     )
 
 

@@ -37,11 +37,28 @@ export interface Position {
   hedge_identification_date?: string | null;
   irc_1221_acknowledgment?: boolean | null;
   linked_cash_sale_ids?: string[];
+  // High-water mark — updated daily by APScheduler
+  peak_pnl_per_bu?: number | null;
+  peak_pnl_date?: string | null;
   // Live P&L — populated for ACTIVE positions by GET /positions
   underlying_price?: number | null;
   options_pnl_per_bu?: number | null;
   net_effective_price?: number | null;
   net_effective_vs_spot_per_bu?: number | null;
+}
+
+export interface HedgeAlert {
+  id: string;
+  position_id: string;
+  commodity: string;
+  contract_month: string | null;
+  alert_type: string;   // phase1_roll_up | phase1_roll_down | phase2_take_profit
+  level: "yellow" | "red";
+  reason: string;
+  metadata: Record<string, unknown>;
+  acknowledged: boolean;
+  acknowledged_at: string | null;
+  created_at: string | null;
 }
 
 export interface PositionCreate {

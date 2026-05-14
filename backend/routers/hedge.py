@@ -9,6 +9,7 @@ import structlog
 from fastapi import APIRouter, HTTPException
 
 from backend.models.hedge import (
+    AlertResponse,
     AuditEntry,
     CashPriceResponse,
     CloseRequest,
@@ -32,6 +33,10 @@ from farm_platform.hedge.tracker import (
     get_all_positions,
     get_position_by_id,
     patch_position,
+)
+from farm_platform.storage.mongo import (
+    acknowledge_alert,
+    list_active_alerts,
 )
 from farm_platform.storage.timescale import get_futures_history, get_latest_cash, get_latest_futures
 
@@ -430,3 +435,21 @@ async def get_cash_prices() -> list[dict[str, Any]]:
                 "contract_month": row["contract_month"],
             })
     return results
+
+
+# ── Alerts ────────────────────────────────────────────────────────────────────
+
+@router.get("/alerts", response_model=list[AlertResponse])
+async def get_alerts(position_id: str | None = None) -> list[dict[str, Any]]:
+    """Return all active (unacknowledged) phase transition alerts."""
+    return await list_active_alerts(position_id=position_id)
+
+
+@router.post("/alerts/{alert_id}/acknowledge", response_model=dict[str, str])
+async def acknowledge_alert_endpoint(alert_id: str) -> dict[str, str]:
+    """Mark an alert as acknowledged — removes it from the active list."""
+    try:
+        await acknowledge_alert(alert_id)
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"id": alert_id}

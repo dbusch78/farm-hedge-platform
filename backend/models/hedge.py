@@ -116,6 +116,9 @@ class PositionResponse(BaseModel):
     realized_pnl_per_bu: float | None = None
     realized_pnl_total: float | None = None
     parent_position_id: str | None = None
+    # High-water mark — updated daily by APScheduler
+    peak_pnl_per_bu: float | None = None
+    peak_pnl_date: str | None = None
     notes: str = ""
     # Tax classification
     tax_treatment: str | None = None
@@ -178,3 +181,17 @@ class CashPriceResponse(BaseModel):
     futures_ref: float | None
     basis: float | None
     contract_month: str | None
+
+
+class AlertResponse(BaseModel):
+    id: str
+    position_id: str
+    commodity: str
+    contract_month: str | None = None
+    alert_type: str             # phase1_roll_up | phase1_roll_down | phase2_take_profit
+    level: str                  # yellow | red
+    reason: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    acknowledged: bool = False
+    acknowledged_at: str | None = None
+    created_at: str | None = None

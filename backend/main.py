@@ -24,8 +24,15 @@ from farm_platform.feeds.ambient_feed import run_once as ambient_run_once
 from farm_platform.feeds.elevator_scraper import run_once as elevator_run_once
 from farm_platform.feeds.futures_feed import register_price_callback, run_once
 from farm_platform.feeds.openmeteo_feed import run_once as openmeteo_run_once
-from farm_platform.storage.mongo import ensure_collections
-from farm_platform.storage.timescale import close_pool, get_pool
+from farm_platform.hedge.alerts import evaluate_alerts
+from farm_platform.storage.mongo import (
+    create_alert,
+    ensure_collections,
+    get_active_alert,
+    list_positions as _list_positions_raw,
+    update_position as _update_position_raw,
+)
+from farm_platform.storage.timescale import close_pool, get_latest_futures, get_pool
 
 log = structlog.get_logger(__name__)
 
@@ -53,6 +60,75 @@ app.include_router(ws_router)
 
 # ── Scheduler ─────────────────────────────────────────────────────────────────
 _scheduler = AsyncIOScheduler()
+
+
+async def _update_peaks_and_alerts() -> None:
+    """Daily job: update peak P&L high-water marks and fire phase transition alerts."""
+    from datetime import date
+    try:
+        positions = await _list_positions_raw("active")
+        if not positions:
+            return
+
+        # Batch futures price lookups
+        underlying: dict[str, float] = {}
+        for sym, commodity in [("ZC=F", "ZC"), ("ZS=F", "ZS")]:
+            row = await get_latest_futures(sym)
+            if row and row.get("close"):
+                underlying[commodity] = float(row["close"])
+
+        updated_peaks = 0
+        fired_alerts = 0
+
+        for pos in positions:
+            commodity = pos.get("commodity")
+            price = underlying.get(commodity)
+            if price is None:
+                continue
+
+            # Compute current unrealized P&L
+            phase = pos.get("phase", 1)
+            strike = pos.get("strike", 0.0)
+            premium = pos.get("premium_paid_per_bu", 0.0)
+            if phase == 1:
+                current_pnl = max(strike - price, 0.0) - premium
+            else:
+                current_pnl = max(price - strike, 0.0) - premium
+
+            # Update high-water mark
+            stored_peak = pos.get("peak_pnl_per_bu")
+            if stored_peak is None or current_pnl > stored_peak:
+                await _update_position_raw(pos["id"], {
+                    "peak_pnl_per_bu": round(current_pnl, 4),
+                    "peak_pnl_date": date.today().isoformat(),
+                })
+                pos["peak_pnl_per_bu"] = current_pnl
+                updated_peaks += 1
+
+            # Evaluate alert rules
+            triggered = evaluate_alerts(pos, price, settings.alerts)
+            for alert in triggered:
+                existing = await get_active_alert(pos["id"], alert.alert_type)
+                if existing is None:
+                    await create_alert({
+                        "position_id": pos["id"],
+                        "commodity": commodity,
+                        "contract_month": pos.get("contract_month"),
+                        "alert_type": alert.alert_type,
+                        "level": alert.level,
+                        "reason": alert.reason,
+                        "metadata": alert.metadata,
+                    })
+                    fired_alerts += 1
+
+        log.info(
+            "alert_job_complete",
+            positions_checked=len(positions),
+            peaks_updated=updated_peaks,
+            alerts_fired=fired_alerts,
+        )
+    except Exception:
+        log.exception("alert_job_error")
 
 
 @app.on_event("startup")
@@ -98,6 +174,15 @@ async def startup() -> None:
         next_run_time=datetime.now(tz=timezone.utc),
     )
 
+    alert_interval = settings.schedule.alert_job_interval_hrs
+    _scheduler.add_job(
+        _update_peaks_and_alerts,
+        "interval",
+        hours=alert_interval,
+        id="alert_job",
+        next_run_time=datetime.now(tz=timezone.utc),
+    )
+
     _scheduler.start()
     log.info(
         "scheduler_started",
@@ -105,6 +190,7 @@ async def startup() -> None:
         elevator_interval_hrs=elevator_interval,
         ambient_interval_min=ambient_interval,
         openmeteo_interval_hrs=openmeteo_interval,
+        alert_interval_hrs=alert_interval,
     )
 
 
