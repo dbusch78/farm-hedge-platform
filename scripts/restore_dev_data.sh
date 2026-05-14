@@ -13,9 +13,13 @@ fi
 
 echo "==> Restoring TimescaleDB..."
 if [ -f "$DUMPS_DIR/timescale.sql" ]; then
-  # Drop and recreate the database to get a clean slate
+  # Terminate all connections then drop — WITH (FORCE) requires pg13+
   docker exec farm-platform-timescaledb-1 \
-    psql -U farm -d postgres -c "DROP DATABASE IF EXISTS farm_platform;" 2>/dev/null || true
+    psql -U farm -d postgres -c \
+    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='farm_platform' AND pid <> pg_backend_pid();" \
+    2>/dev/null || true
+  docker exec farm-platform-timescaledb-1 \
+    psql -U farm -d postgres -c "DROP DATABASE IF EXISTS farm_platform WITH (FORCE);" 2>/dev/null || true
   docker exec farm-platform-timescaledb-1 \
     psql -U farm -d postgres -c "CREATE DATABASE farm_platform OWNER farm;"
   # Restore
