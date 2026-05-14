@@ -946,11 +946,11 @@ Work through milestones in order. Each milestone should be fully working before 
 **Decision rationale:** Grafana was sunsetted (2026-04-28) because it required a separate login, a separate subdomain, complex provisioning, and a full extra container — all for what amounts to a few time-series charts that TradingView already handles better in-app. Alerting is handled by Python workers (Milestone 4.5), not Grafana alerting.
 
 #### Analytics Page (`/analytics`)
-- [ ] Create `app/analytics/page.tsx` — tabbed or sectioned layout, server component
-- [ ] Section: **Futures Prices** — ZC/ZS/ZW close price history (TradingView time series, configurable lookback 30/90/365 days)
-- [ ] Section: **Basis History** — cash price vs. futures ref, basis line, 3-year average basis overlay; per elevator selector
-- [ ] Section: **Net Effective Price** — net effective price per bushel over the crop year, with premium cost visible as a deduction layer
-- [ ] Add link to `/analytics` from the `/hedge` page and main nav
+- [x] Create `app/analytics/page.tsx` — tabbed or sectioned layout, server component
+- [x] Section: **Futures Prices** — ZC/ZS/ZW close price history (TradingView time series, configurable lookback 30/90/365 days)
+- [x] Section: **Basis History** — cash price vs. futures ref, basis line, 3-year average basis overlay; per elevator selector
+- [x] Section: **Net Effective Price** — net effective price per bushel over the crop year, with premium cost visible as a deduction layer
+- [x] Add link to `/analytics` from the `/hedge` page and main nav
 
 #### Weather Charts (add after Milestone 3 data exists)
 - [ ] Section: **On-Farm Weather** — temp, rain, GDU cumulative vs. historical average (line chart)
@@ -962,9 +962,9 @@ Work through milestones in order. Each milestone should be fully working before 
 - [ ] Section: **Positioning Accuracy** — annotated runs with actual vs. predicted outcome overlay
 
 #### Backend additions needed
-- [ ] `GET /api/analytics/futures-history?symbol=ZC=F&days=365` — OHLCV array for charting
-- [ ] `GET /api/analytics/basis-history?elevator=Toulon&days=180` — basis series
-- [ ] `GET /api/analytics/nep-history?days=365` — net effective price series (requires joining positions + options_snapshots)
+- [x] `GET /api/analytics/futures-history?symbol=ZC=F&days=365` — OHLCV array for charting
+- [x] `GET /api/analytics/basis-history?elevator=Toulon&days=180` — basis series
+- [x] `GET /api/analytics/nep-history?days=365` — net effective price series (requires joining positions + options_snapshots)
 
 #### Milestone 2B Acceptance Criteria
 - [ ] `/analytics` loads with at least Futures Prices and Basis History charts showing real data
@@ -1186,7 +1186,7 @@ at 80% of peak" — visible even when no alert is firing.
 - [x] Update `AgentCard.tsx` with real positioning advisor output and confidence
 - [x] Add WASDE countdown to agent card (days until next release)
 - [x] Implement `app/agents/page.tsx` -- full agent history with annotation controls
-- [ ] Agent run history / cost charts added to in-app analytics page (Milestone 2B)
+- [x] Agent run history / cost charts added to in-app analytics page (Milestone 2B)
 
 #### Milestone 4 Acceptance Criteria
 - [ ] All five agents run without error

@@ -85,9 +85,14 @@ export default async function HedgePage() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-[#e8edf5]">Hedge Positions</h1>
-        <a href="/" className="text-xs text-[#3b82f6] hover:underline">
-          ← Dashboard
-        </a>
+        <div className="flex items-center gap-4">
+          <a href="/analytics" className="text-xs text-[#7b8aab] hover:text-[#e8edf5] transition-colors">
+            Analytics →
+          </a>
+          <a href="/" className="text-xs text-[#3b82f6] hover:underline">
+            ← Dashboard
+          </a>
+        </div>
       </div>
 
       {allPositions.length === 0 && closedPositions.length === 0 && (

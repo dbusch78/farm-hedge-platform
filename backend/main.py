@@ -40,7 +40,12 @@ from farm_platform.storage.mongo import (
     list_positions as _list_positions_raw,
     update_position as _update_position_raw,
 )
-from farm_platform.storage.timescale import close_pool, get_latest_futures, get_pool
+from farm_platform.storage.timescale import (
+    close_pool,
+    get_latest_futures,
+    get_pool,
+    insert_options_snapshot,
+)
 
 log = structlog.get_logger(__name__)
 
@@ -113,6 +118,20 @@ async def _update_peaks_and_alerts() -> None:
                 })
                 pos["peak_pnl_per_bu"] = current_pnl
                 updated_peaks += 1
+
+            # Record daily snapshot for NEP history chart
+            cash_ref = pos.get("cash_sale_price") or price  # Phase 2 uses locked price
+            net_eff = round(cash_ref + current_pnl, 4)
+            await insert_options_snapshot(
+                time=datetime.now(tz=timezone.utc),
+                position_id=pos["id"],
+                underlying_px=price,
+                option_px=None,
+                delta=None,
+                premium_paid=pos.get("premium_paid_per_bu"),
+                pnl_per_bushel=round(current_pnl, 4),
+                net_eff_price=net_eff,
+            )
 
             # Evaluate alert rules
             triggered = evaluate_alerts(pos, price, settings.alerts)

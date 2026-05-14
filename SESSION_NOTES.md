@@ -1,5 +1,31 @@
 # Session Notes
 
+## Session: 2026-05-14 (continued) — Milestone 2B Analytics
+
+### What was done
+
+**Milestone 2B complete (core analytics page):**
+
+- `app/analytics/page.tsx` — tabbed analytics page (already built last session); confirmed TypeScript-clean
+- `backend/routers/analytics.py` — 3 endpoints (futures-history, basis-history, nep-history) + elevators list (already built)
+- `farm_platform/storage/timescale.py` — `get_futures_history`, `get_basis_history`, `get_nep_history`, `get_elevator_names` (already built)
+- **NEW:** `backend/main.py`: `_update_peaks_and_alerts` now calls `insert_options_snapshot` for each active position on every daily run — this populates the `options_snapshots` hypertable so the NEP history chart has data
+- **NEW:** `frontend/app/hedge/page.tsx`: added "Analytics →" link in the page header next to "← Dashboard"
+
+### What comes next
+
+- Milestone 4 Acceptance Criteria — run each agent at least once with real or test data, annotate with outcomes
+  - All five agents run without error
+  - Every run stored in MongoDB with full input snapshot, prompt version, token cost
+  - At least one historical test run per agent, annotated with actual market outcome
+  - Positioning advisor output visible on main dashboard agent card
+  - Phase transition alert fires and appears in UI given a test scenario
+  - Agent history page shows runs with working annotation controls
+- Milestone 2B Weather/Agent chart sections (after Milestone 4 data exists)
+
+---
+
+
 ## Session: 2026-05-14 — Phase Transition Alerts (Milestone 4 start)
 
 ### What was done
