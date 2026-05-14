@@ -13,6 +13,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.routers import agents as agents_router
 from backend.routers import analytics as analytics_router
 from backend.routers import hedge as hedge_router
 from backend.routers import tax as tax_router
@@ -20,6 +21,13 @@ from backend.routers import weather as weather_router
 from backend.websocket import on_new_price
 from backend.websocket import router as ws_router
 from farm_platform.config import settings
+from farm_platform.agents import (
+    news_filter,
+    positioning_advisor,
+    sa_monitor,
+    usda_skeptic,
+    weather_analyst,
+)
 from farm_platform.feeds.ambient_feed import run_once as ambient_run_once
 from farm_platform.feeds.elevator_scraper import run_once as elevator_run_once
 from farm_platform.feeds.futures_feed import register_price_callback, run_once
@@ -52,6 +60,7 @@ app.add_middleware(
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(hedge_router.router)
+app.include_router(agents_router.router)
 app.include_router(analytics_router.router)
 app.include_router(weather_router.router)
 app.include_router(tax_router.router)
@@ -182,6 +191,24 @@ async def startup() -> None:
         id="alert_job",
         next_run_time=datetime.now(tz=timezone.utc),
     )
+
+    # ── AI agent jobs ──────────────────────────────────────────────────────────
+    # Populate the manual-trigger registry
+    agents_router.AGENT_REGISTRY.update({
+        "usda_skeptic":       usda_skeptic.run_once,
+        "sa_monitor":         sa_monitor.run_once,
+        "weather_analyst":    weather_analyst.run_once,
+        "news_filter":        news_filter.run_once,
+        "positioning_advisor": positioning_advisor.run_once,
+    })
+
+    # Scheduled: news filter daily, weather analyst daily in-season,
+    # SA monitor weekly, USDA skeptic monthly, positioning advisor daily
+    _scheduler.add_job(news_filter.run_once, "interval", hours=24, id="news_filter")
+    _scheduler.add_job(weather_analyst.run_once, "interval", hours=24, id="weather_analyst")
+    _scheduler.add_job(sa_monitor.run_once, "interval", hours=168, id="sa_monitor")  # weekly
+    _scheduler.add_job(usda_skeptic.run_once, "interval", hours=720, id="usda_skeptic")  # ~monthly
+    _scheduler.add_job(positioning_advisor.run_once, "interval", hours=24, id="positioning_advisor")
 
     _scheduler.start()
     log.info(

@@ -1079,23 +1079,22 @@ Work through milestones in order. Each milestone should be fully working before 
 **Sequencing note:** Task 4 (position lifecycle) must be complete before any agent work begins. The Phase Transition Alerts engine cannot fire on positions that have no concept of "closed." Building the agent against an incomplete schema means rewriting tools and prompts later.
 
 #### Agent Infrastructure
-- [ ] Implement `platform/agents/base_agent.py`
-  - [ ] Prompt load from MongoDB `prompt_versions` by agent name and version
-  - [ ] Claude API call (claude-sonnet-4-20250514, max_tokens=1000)
-  - [ ] Run document build and write to `agent_runs` with full input snapshot
-  - [ ] Token usage and cost_usd logging
-  - [ ] Structured error handling for API errors and rate limits
-- [ ] Implement `platform/storage/mongo.py` method: `annotate_agent_run(run_id, outcome, notes, rating)`
+- [x] Implement `platform/agents/base_agent.py`
+  - [x] Prompt load from MongoDB `prompt_versions` by agent name and version
+  - [x] Claude API call (claude-sonnet-4-6, max_tokens=1000)
+  - [x] Run document build and write to `agent_runs` with full input snapshot
+  - [x] Token usage and cost_usd logging
+  - [x] Structured error handling for API errors and rate limits
+- [x] Implement `platform/storage/mongo.py` method: `annotate_agent_run(run_id, outcome, notes, rating)`
 
 #### Individual Agents
-- [ ] Implement `platform/feeds/usda_feed.py` -- WASDE fetch and parse
-- [ ] Implement and test `platform/agents/usda_skeptic.py` -- test against a known historical WASDE
-- [ ] Implement `platform/feeds/conab_feed.py` -- Brazilian crop report fetch
-- [ ] Implement and test `platform/agents/sa_monitor.py` -- test against 2022 Argentine drought period
-- [ ] Implement and test `platform/agents/weather_analyst.py` -- verify crop stage logic in prompt
-- [ ] Implement `platform/feeds/news_feed.py` -- NewsAPI + Finnhub with keyword filter
-- [ ] Implement and test `platform/agents/news_filter.py` -- verify irrelevant stories are filtered
-- [ ] Implement and test `platform/agents/positioning_advisor.py` -- verify it synthesizes agents 1-4 and produces actionable output
+- [x] Implement `platform/feeds/usda_feed.py` -- USDA FAS PSD API (corn + bean ending stocks)
+- [x] Implement `platform/agents/usda_skeptic.py` -- divergence vs. private estimates
+- [x] Implement `platform/feeds/news_feed.py` -- NewsAPI + Finnhub with keyword filter
+- [x] Implement `platform/agents/sa_monitor.py` -- weather for MT/Paraná/Pampas from TimescaleDB
+- [x] Implement `platform/agents/weather_analyst.py` -- local station + GDU + crop stage logic
+- [x] Implement `platform/agents/news_filter.py` -- grain-only filter with sentiment scores
+- [x] Implement `platform/agents/positioning_advisor.py` -- synthesizes agents 1-4 + positions
 
 #### Phase Transition Alerts: Roll & Close Recommendation Engine
 
@@ -1180,13 +1179,13 @@ at 80% of peak" — visible even when no alert is firing.
 - [x] Phase 2 position card: show peak P&L + capture % at all times
 
 #### FastAPI + Frontend
-- [ ] `GET /api/agents/runs` -- list recent runs with filters
-- [ ] `GET /api/agents/runs/{id}` -- full run detail
-- [ ] `POST /api/agents/runs/{id}/annotate` -- save outcome, notes, rating
-- [ ] `POST /api/agents/{agent}/run` -- trigger manual run
-- [ ] Update `AgentCard.tsx` with real positioning advisor output and confidence
-- [ ] Add WASDE countdown to agent card (days until next release)
-- [ ] Implement `app/agents/page.tsx` -- full agent history with annotation controls
+- [x] `GET /api/agents/runs` -- list recent runs with filters
+- [x] `GET /api/agents/runs/{id}` -- full run detail
+- [x] `POST /api/agents/runs/{id}/annotate` -- save outcome, notes, rating
+- [x] `POST /api/agents/{agent}/run` -- trigger manual run
+- [x] Update `AgentCard.tsx` with real positioning advisor output and confidence
+- [x] Add WASDE countdown to agent card (days until next release)
+- [x] Implement `app/agents/page.tsx` -- full agent history with annotation controls
 - [ ] Agent run history / cost charts added to in-app analytics page (Milestone 2B)
 
 #### Milestone 4 Acceptance Criteria

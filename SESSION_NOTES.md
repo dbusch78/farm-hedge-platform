@@ -36,9 +36,68 @@
 - `tests/platform/test_alerts.py`: 17 tests — expiry math, all trigger conditions,
   boundary cases, metadata shape
 
+### What comes next (after this session)
+
+- Milestone 4 Acceptance Criteria — run each agent at least once with real or
+  test data, annotate with outcomes
+- Agent run history / cost charts (Milestone 2B analytics)
+- CONAB feed (optional, SA monitor currently uses only Open-Meteo weather)
+
+---
+
+## Session: 2026-05-14 (continued) — Milestone 4 Agent Infrastructure
+
+### What was done
+
+**Agent Infrastructure — complete:**
+
+- `farm_platform/agents/base_agent.py`:
+  - Loads system prompt from `prompt_versions` MongoDB collection; falls back to
+    hardcoded default. This enables prompt editing without deploys + historical replay.
+  - Async Claude API call (`AsyncAnthropic`) with `run_agent()` coroutine
+  - Strips markdown fences from Claude output; graceful `parse_error` fallback
+  - Stores full run doc to `agent_runs` with input_snapshot, output, token counts,
+    `cost_usd` (input×$3/M + output×$15/M), and error field on failure
+  - Rate-limit errors caught and stored — scheduler job does not crash
+- `farm_platform/storage/mongo.py`: `get_prompt`, `upsert_prompt` for
+  `prompt_versions` collection
+
+**Feeds:**
+- `farm_platform/feeds/usda_feed.py`: USDA FAS PSD Online API (no auth required);
+  fetches corn+bean ending/production/export/total-use stocks; converts 1000MT → MBu
+- `farm_platform/feeds/news_feed.py`: NewsAPI + Finnhub with grain keyword filter;
+  deduplication by URL; graceful no-op when API keys not configured
+
+**Agents (all with APScheduler jobs + manual trigger support):**
+- `usda_skeptic.py`: divergence vs. private trade estimates (monthly ~10th)
+- `sa_monitor.py`: Brazil/Argentina weather stress from TimescaleDB (weekly)
+- `weather_analyst.py`: on-farm station + GDU + crop stage phenology (daily)
+- `news_filter.py`: 24h grain-relevant news → sentiment + flags (daily)
+- `positioning_advisor.py`: synthesizes agents 1-4 + current positions → 
+  per-position recommendation (daily)
+
+**Backend:**
+- `backend/routers/agents.py`: `GET /api/agents/runs`, `GET /api/agents/runs/{id}`,
+  `POST /api/agents/runs/{id}/annotate`, `POST /api/agents/{agent}/run` (background)
+- `AGENT_REGISTRY` dict populated at startup; manual trigger validates against it
+- `backend/main.py`: agents router + all 5 agent scheduler jobs registered
+
+**Frontend:**
+- `AgentCard.tsx`: WASDE countdown badge; "View history →" link; shows
+  `positioning_note` (preferred) or `summary` from latest run
+- `app/agents/page.tsx`: client component — per-agent filter tabs, manual trigger
+  buttons (queued background task with 5s reload), run cards with collapsible
+  JSON detail and inline annotation form (outcome text + rating 1-5)
+
+**Tests:** 11 new tests in `tests/platform/test_agents.py` — `_parse_output`
+  edge cases, `run_agent` with mocked Anthropic (prompt DB override, rate-limit
+  handling), news_feed deduplication. 81 total passing.
+
 ### What comes next
 
-- Milestone 4 Agent Infrastructure:
+- Milestone 4 Acceptance Criteria — run each agent at least once with real or
+  test data, annotate with outcomes
+- Agent run history / cost charts (Milestone 2B analytics)
   - `farm_platform/agents/base_agent.py` — Claude API call, prompt versioning,
     `agent_runs` write, token cost logging
   - `annotate_agent_run` in mongo.py (already scaffolded, just needs wiring)

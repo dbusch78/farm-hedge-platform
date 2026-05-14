@@ -221,6 +221,28 @@ async def acknowledge_alert(alert_id: str) -> None:
     )
 
 
+# ── prompt_versions ──────────────────────────────────────────────────────────
+
+async def get_prompt(agent_name: str, version: str | None = None) -> dict[str, Any] | None:
+    """Return the latest (or versioned) prompt document for an agent."""
+    db = get_db()
+    filt: dict[str, Any] = {"agent": agent_name}
+    if version:
+        filt["version"] = version
+    doc = await db.prompt_versions.find_one(filt, sort=[("created_at", -1)])
+    return _serialize(doc)
+
+
+async def upsert_prompt(agent_name: str, version: str, system_prompt: str) -> None:
+    """Insert or update a prompt version for an agent."""
+    db = get_db()
+    await db.prompt_versions.update_one(
+        {"agent": agent_name, "version": version},
+        {"$set": {"system_prompt": system_prompt, "updated_at": _now()}},
+        upsert=True,
+    )
+
+
 # ── agent_runs ───────────────────────────────────────────────────────────────
 
 async def create_agent_run(doc: dict[str, Any]) -> str:
